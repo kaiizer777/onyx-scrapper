@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/stealth"
+	"github.com/kaiizer777/onyx-scrapper/internal/stealth"
 )
 
 // URLSet represents a standard XML sitemap containing page URLs.
@@ -110,7 +110,7 @@ func (d *Discoverer) fetchSitemapsFromRobots(ctx context.Context, baseURL string
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("User-Agent", "OnyxBot/1.0 (+https://github.com/kaiizer-99/onyx-scrapper)")
+	req.Header.Set("User-Agent", "OnyxBot/1.0 (+https://github.com/kaiizer777/onyx-scrapper)")
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
@@ -164,7 +164,7 @@ func (d *Discoverer) fetchAndParseSitemapRecursive(ctx context.Context, sitemapU
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "OnyxBot/1.0 (+https://github.com/kaiizer-99/onyx-scrapper)")
+	req.Header.Set("User-Agent", "OnyxBot/1.0 (+https://github.com/kaiizer777/onyx-scrapper)")
 
 	resp, err := d.httpClient.Do(req)
 	if err != nil {

@@ -1,4 +1,4 @@
-module github.com/kaiizer-99/onyx-scrapper
+module github.com/kaiizer777/onyx-scrapper
 
 go 1.25.7
 

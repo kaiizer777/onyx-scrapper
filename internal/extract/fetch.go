@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gocolly/colly/v2"
-	"github.com/kaiizer-99/onyx-scrapper/internal/browser"
-	stealthpkg "github.com/kaiizer-99/onyx-scrapper/internal/stealth"
+	"github.com/kaiizer777/onyx-scrapper/internal/browser"
+	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
 )
 
 // FetchStatic fetches static HTML from targetURL using colly HTTP collector.

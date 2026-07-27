@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/browser"
+	"github.com/kaiizer777/onyx-scrapper/internal/browser"
 )
 
 func TestFetchWithKeyFallbackWorkflow(t *testing.T) {

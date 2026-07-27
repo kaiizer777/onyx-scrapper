@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/config"
+	"github.com/kaiizer777/onyx-scrapper/internal/config"
 )
 
 type Message struct {

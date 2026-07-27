@@ -12,7 +12,7 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
-	stealthpkg "github.com/kaiizer-99/onyx-scrapper/internal/stealth"
+	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
 )
 
 // Pool manages a worker pool of concurrent browser pages (tabs) backed by a shared stealth Chromium instance.

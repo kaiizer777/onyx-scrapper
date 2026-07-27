@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"golang.org/x/net/html"
 )
 

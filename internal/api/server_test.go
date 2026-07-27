@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/search"
+	"github.com/kaiizer777/onyx-scrapper/internal/search"
 )
 
 func TestServerPing(t *testing.T) {

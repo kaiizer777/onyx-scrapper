@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/agent"
-	"github.com/kaiizer-99/onyx-scrapper/internal/crawl"
-	"github.com/kaiizer-99/onyx-scrapper/internal/extract"
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
-	"github.com/kaiizer-99/onyx-scrapper/internal/search"
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/agent"
+	"github.com/kaiizer777/onyx-scrapper/internal/crawl"
+	"github.com/kaiizer777/onyx-scrapper/internal/extract"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/search"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 // Server represents the Onyx Scrapper local HTTP API server.

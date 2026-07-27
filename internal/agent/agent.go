@@ -13,12 +13,12 @@ import (
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
-	browserpkg "github.com/kaiizer-99/onyx-scrapper/internal/browser"
-	"github.com/kaiizer-99/onyx-scrapper/internal/extract"
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
-	stealthpkg "github.com/kaiizer-99/onyx-scrapper/internal/stealth"
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
-	searchpkg "github.com/kaiizer-99/onyx-scrapper/internal/search"
+	browserpkg "github.com/kaiizer777/onyx-scrapper/internal/browser"
+	"github.com/kaiizer777/onyx-scrapper/internal/extract"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	searchpkg "github.com/kaiizer777/onyx-scrapper/internal/search"
 )
 
 const (

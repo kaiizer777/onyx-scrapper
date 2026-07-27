@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 )
 
 const MaxExtractContentCharLimit = 35000

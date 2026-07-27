@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 // SearchResult represents a normalized web or local search result item.

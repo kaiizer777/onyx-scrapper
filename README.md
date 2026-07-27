@@ -78,7 +78,7 @@ SearXNG will run on `http://localhost:8888` with JSON format output enabled.
 
 ### Installation
 ```bash
-git clone https://github.com/kaiizer-99/onyx-scrapper.git
+git clone https://github.com/kaiizer777/onyx-scrapper.git
 cd onyx-scrapper
 go build -o onyx ./cmd/onyx
 ```

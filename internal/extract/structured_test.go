@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 )
 
 type mockLLMClient struct {

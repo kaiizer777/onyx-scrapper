@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 func TestLoadConfig(t *testing.T) {

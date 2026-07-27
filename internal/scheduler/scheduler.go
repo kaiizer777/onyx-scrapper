@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/extract"
-	"github.com/kaiizer-99/onyx-scrapper/internal/llm"
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/extract"
+	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	"gopkg.in/yaml.v3"
 )
 

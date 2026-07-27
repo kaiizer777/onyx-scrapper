@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaiizer-99/onyx-scrapper/internal/stealth"
-	"github.com/kaiizer-99/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/stealth"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 func TestQueueOperations(t *testing.T) {
