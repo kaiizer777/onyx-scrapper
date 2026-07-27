@@ -128,7 +128,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 6 — Basic Agent Loop (Multi-Step Reasoning)
+## - [x] Step 6 — Basic Agent Loop (Multi-Step Reasoning)
 
 **Goal:** The actual "agent" part — given a goal in plain English, MiMo plans steps (navigate → find → click → extract) and your code executes them.
 
@@ -143,7 +143,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 7 — Stealth Hardening & Rate Limiting
+## - [x] Step 7 — Stealth Hardening & Rate Limiting
 
 **Goal:** Reduce block rate on your own IP using free code-level tricks (no paid proxy yet).
 
@@ -158,7 +158,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 8 — Free-Tier Fallback Layer (the "remaining 10%")
+## - [x] Step 8 — Free-Tier Fallback Layer (the "remaining 10%")
 
 **Goal:** When your own IP gets blocked, fall back to free-tier external APIs instead of failing.
 
@@ -171,7 +171,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 9 — CLI + Minimal HTTP API
+## - [x] Step 9 — CLI + Minimal HTTP API
 
 **Goal:** Make Onyx Scrapper usable as a daily tool, not just a script you edit — and callable as a plain web-search API from any other agentic harness/TUI.
 
@@ -203,7 +203,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 10 — Scheduling + Polish
+## - [x] Step 10 — Scheduling + Polish
 
 **Goal:** Automate recurring scrapes and clean up for daily use.
 
@@ -216,7 +216,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 11 — Self-Hosted Search Engine (SearXNG)
+## - [x] Step 11 — Self-Hosted Search Engine (SearXNG)
 
 **Goal:** Give Onyx real web *search* (not just single-URL fetch) — your own private, unlimited, unrated Google/Bing/DuckDuckGo aggregator, wired up as Onyx's `/search` endpoint from Step 9.
 
@@ -232,7 +232,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 12 — Site & Sitemap Crawling (Multi-Page Discovery)
+## - [x] Step 12 — Site & Sitemap Crawling (Multi-Page Discovery)
 
 **Goal:** Go from "one URL at a time" to "discover and crawl an entire site" automatically.
 
@@ -246,7 +246,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 13 — Concurrent Browser Pool (Real Parallelism)
+## - [x] Step 13 — Concurrent Browser Pool (Real Parallelism)
 
 **Goal:** Scrape/crawl many pages at once instead of one Chromium tab at a time — pure Go concurrency, still $0.
 
@@ -278,11 +278,11 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 | [x] | 3 | Semantic element finder | AI-located selectors |
 | [x] | 4 | Structured extraction | HTML → JSON |
 | [x] | 5 | SQLite storage | Persistent, searchable data |
-| [ ] | 6 | Agent loop | Autonomous multi-step tasks |
-| [ ] | 7 | Stealth + rate limits | Lower block rate, free |
-| [ ] | 8 | Free-tier fallback | Graceful degradation on blocks |
-| [ ] | 9 | CLI + API | Real usable tool |
-| [ ] | 10 | Scheduling + polish | Daily-driver ready |
-| [ ] | 11 | SearXNG search | Real web search, unlimited, free |
-| [ ] | 12 | Site/sitemap crawling | Auto-discover & ingest full domains |
-| [ ] | 13 | Concurrent browser pool | Real parallel scraping |
+| [x] | 6 | Agent loop | Autonomous multi-step tasks |
+| [x] | 7 | Stealth + rate limits | Lower block rate, free |
+| [x] | 8 | Free-tier fallback | Graceful degradation on blocks |
+| [x] | 9 | CLI + API | Real usable tool |
+| [x] | 10 | Scheduling + polish | Daily-driver ready |
+| [x] | 11 | SearXNG search | Real web search, unlimited, free |
+| [x] | 12 | Site/sitemap crawling | Auto-discover & ingest full domains |
+| [x] | 13 | Concurrent browser pool | Real parallel scraping |

@@ -68,3 +68,50 @@ func TestStore(t *testing.T) {
 		t.Fatalf("expected match URL %s, got %s", url, results[0].URL)
 	}
 }
+
+func TestAgentStore(t *testing.T) {
+	st, err := NewStore(":memory:")
+	if err != nil {
+		t.Fatalf("NewStore in memory failed: %v", err)
+	}
+	defer st.Close()
+
+	goal := "Search news and extract head item"
+	runID, err := st.CreateAgentRun(goal)
+	if err != nil {
+		t.Fatalf("CreateAgentRun failed: %v", err)
+	}
+	if runID <= 0 {
+		t.Fatalf("expected valid runID, got %d", runID)
+	}
+
+	stepID, err := st.SaveAgentStep(runID, 1, "navigate", `{"url": "https://example.com"}`, "Navigated successfully", "")
+	if err != nil {
+		t.Fatalf("SaveAgentStep failed: %v", err)
+	}
+	if stepID <= 0 {
+		t.Fatalf("expected valid stepID, got %d", stepID)
+	}
+
+	err = st.UpdateAgentRunStatus(runID, "completed", "Top story found")
+	if err != nil {
+		t.Fatalf("UpdateAgentRunStatus failed: %v", err)
+	}
+
+	run, err := st.GetAgentRun(runID)
+	if err != nil {
+		t.Fatalf("GetAgentRun failed: %v", err)
+	}
+	if run == nil || run.Status != "completed" || run.Result != "Top story found" {
+		t.Fatalf("unexpected agent run state: %+v", run)
+	}
+
+	steps, err := st.GetAgentSteps(runID)
+	if err != nil {
+		t.Fatalf("GetAgentSteps failed: %v", err)
+	}
+	if len(steps) != 1 || steps[0].Action != "navigate" {
+		t.Fatalf("unexpected agent steps: %+v", steps)
+	}
+}
+

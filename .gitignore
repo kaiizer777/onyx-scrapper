@@ -1,5 +1,7 @@
 # Configuration and sensitive files
 config.yaml
+.env
+schedule.local.yaml
 
 # Data directory
 /data

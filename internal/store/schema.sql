@@ -35,3 +35,25 @@ CREATE TRIGGER IF NOT EXISTS pages_au AFTER UPDATE ON pages BEGIN
     INSERT INTO pages_fts(pages_fts, rowid, url, clean_text) VALUES('delete', old.id, old.url, old.clean_text);
     INSERT INTO pages_fts(rowid, url, clean_text) VALUES (new.id, new.url, new.clean_text);
 END;
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal TEXT,
+    status TEXT,
+    result TEXT,
+    created_at DATETIME,
+    updated_at DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS agent_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    step_number INTEGER,
+    action TEXT,
+    args_json TEXT,
+    result TEXT,
+    error TEXT,
+    created_at DATETIME,
+    FOREIGN KEY(run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
+);
+

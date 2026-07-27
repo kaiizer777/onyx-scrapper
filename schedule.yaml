@@ -1,0 +1,14 @@
+# Onyx Scrapper — Scheduled Recurring Jobs Configuration
+
+jobs:
+  - name: "Hacker News Front Page"
+    url: "https://news.ycombinator.com"
+    interval: "1h"
+    render: false
+    schema: "article"
+
+  - name: "Example Product Monitor"
+    url: "https://example.com"
+    interval: "6h"
+    render: true
+    schema: "product"

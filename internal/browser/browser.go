@@ -3,12 +3,14 @@ package browser
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
+	stealthpkg "github.com/kaiizer-99/onyx-scrapper/internal/stealth"
 )
 
 // FetchRendered launches a stealth Chromium page using go-rod, navigates to targetURL,
@@ -16,6 +18,17 @@ import (
 func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
+	}
+
+	// 1. Enforce per-domain rate limiting
+	if err := stealthpkg.DefaultDomainRateLimiter.Wait(ctx, targetURL); err != nil {
+		slog.Warn("Rate limiter wait warning", "url", targetURL, "error", err)
+	}
+
+	// 2. Robots.txt check
+	allowed, err := stealthpkg.DefaultRobotsChecker.IsAllowed(ctx, "", targetURL)
+	if err == nil && !allowed {
+		slog.Warn("robots.txt disallows scraping", "url", targetURL)
 	}
 
 	// Launch headless browser (leakless false avoids Windows Defender false-positives on temp helper)
@@ -54,13 +67,12 @@ func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration)
 
 	defer page.Close()
 
-	// Set realistic viewport (1920x1080)
-	_ = (proto.EmulationSetDeviceMetricsOverride{
-		Width:             1920,
-		Height:            1080,
-		DeviceScaleFactor: 1,
-		Mobile:            false,
-	}).Call(page)
+	// 3. Apply randomized stealth profile
+	prof := stealthpkg.GetRandomProfile()
+	ApplyProfile(page, prof)
+
+	// Human pause before navigation
+	_ = stealthpkg.HumanDelayCtx(bodyCtx, 300, 800)
 
 	// Navigate to target URL
 	if err := page.Navigate(targetURL); err != nil {
@@ -70,6 +82,9 @@ func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration)
 	// Wait for DOM load & network stability
 	_ = page.WaitLoad()
 	_ = page.WaitStable(1 * time.Second)
+
+	// Human pause after loading
+	_ = stealthpkg.HumanDelayCtx(bodyCtx, 400, 900)
 
 	htmlContent, err := page.HTML()
 	if err != nil {
@@ -82,3 +97,23 @@ func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration)
 
 	return htmlContent, nil
 }
+
+// ApplyProfile applies a stealth profile (viewport, user agent, client hints, timezone) to a rod Page.
+func ApplyProfile(page *rod.Page, prof stealthpkg.Profile) {
+	_ = (proto.EmulationSetDeviceMetricsOverride{
+		Width:             prof.ViewportWidth,
+		Height:            prof.ViewportHeight,
+		DeviceScaleFactor: 1,
+		Mobile:            false,
+	}).Call(page)
+
+	_ = (proto.EmulationSetTimezoneOverride{
+		TimezoneID: prof.Timezone,
+	}).Call(page)
+
+	_ = page.SetUserAgent(&proto.NetworkSetUserAgentOverride{
+		UserAgent:      prof.UserAgent,
+		AcceptLanguage: prof.AcceptLanguage,
+	})
+}
+

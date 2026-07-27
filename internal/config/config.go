@@ -14,7 +14,19 @@ type OpenCodeZenConfig struct {
 }
 
 type Config struct {
-	OpenCodeZen OpenCodeZenConfig `yaml:"opencode_zen"`
+	OpenCodeZen   OpenCodeZenConfig `yaml:"opencode_zen"`
+	ScraperAPIKey string            `yaml:"scraperapi_key"`
+}
+
+// GetScraperAPIKey returns the ScraperAPI key from env var SCRAPERAPI_KEY or config file.
+func (c *Config) GetScraperAPIKey() string {
+	if envKey := os.Getenv("SCRAPERAPI_KEY"); envKey != "" {
+		return envKey
+	}
+	if c != nil {
+		return c.ScraperAPIKey
+	}
+	return ""
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -34,3 +46,4 @@ func LoadConfig(path string) (*Config, error) {
 
 	return &cfg, nil
 }
+
