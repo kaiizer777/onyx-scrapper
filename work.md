@@ -82,7 +82,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 4 — Structured Data Extraction (HTML → JSON)
+## - [x] Step 4 — Structured Data Extraction (HTML → JSON)
 
 **Goal:** Turn a page (or page fragment) into structured JSON via MiMo, with a schema you define per task.
 
@@ -276,7 +276,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 | [x] | 1 | Static fetch + clean | Readable text from URL |
 | [x] | 2 | Headless browser | JS-rendered page support |
 | [x] | 3 | Semantic element finder | AI-located selectors |
-| [ ] | 4 | Structured extraction | HTML → JSON |
+| [x] | 4 | Structured extraction | HTML → JSON |
 | [ ] | 5 | SQLite storage | Persistent, searchable data |
 | [ ] | 6 | Agent loop | Autonomous multi-step tasks |
 | [ ] | 7 | Stealth + rate limits | Lower block rate, free |
