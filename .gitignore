@@ -1,0 +1,28 @@
+# Configuration and sensitive files
+config.yaml
+
+# Data directory
+/data
+data/
+
+# Binaries and executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+onyx
+
+# Test binary built by `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically target "go test -coverprofile"
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE / Editor settings
+.idea/
+.vscode/
+*.swp
