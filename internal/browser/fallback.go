@@ -13,16 +13,11 @@ import (
 
 // BlockedKeywords contains common anti-bot/CAPTCHA indicators present in blocked HTML responses.
 var BlockedKeywords = []string{
-	"cloudflare",
 	"cf-browser-verification",
 	"cf-wrapper",
 	"just a moment...",
 	"attention required! | cloudflare",
-	"ddos-guard",
-	"datadome",
 	"px-captcha",
-	"imperva",
-	"incapsula",
 	"g-recaptcha",
 	"hcaptcha",
 	"cf-turnstile",
@@ -31,6 +26,9 @@ var BlockedKeywords = []string{
 	"please enable cookies",
 	"please turn javascript on and reload",
 	"bot detection",
+	"checking your browser before accessing",
+	"ddos protection by",
+	"checking if the site connection is secure",
 }
 
 // IsBlocked checks if an HTTP status code or page HTML body contains anti-bot block signatures.
@@ -48,8 +46,18 @@ func IsBlocked(statusCode int, body string) bool {
 	}
 
 	lowerBody := strings.ToLower(body)
+	matchedKeyword := false
 	for _, kw := range BlockedKeywords {
 		if strings.Contains(lowerBody, kw) {
+			matchedKeyword = true
+			break
+		}
+	}
+
+	if matchedKeyword {
+		// Only flag as blocked if the page is suspiciously short (e.g., < 2000 chars)
+		// Real challenge pages are minimal compared to full rendered content.
+		if len(body) < 2000 {
 			return true
 		}
 	}
