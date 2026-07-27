@@ -96,7 +96,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 
 ---
 
-## - [ ] Step 5 — Local Storage Layer (SQLite)
+## - [x] Step 5 — Local Storage Layer (SQLite)
 
 **Goal:** Persist every scrape + extraction so nothing is wasted — build your personal data lake.
 
@@ -277,7 +277,7 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 | [x] | 2 | Headless browser | JS-rendered page support |
 | [x] | 3 | Semantic element finder | AI-located selectors |
 | [x] | 4 | Structured extraction | HTML → JSON |
-| [ ] | 5 | SQLite storage | Persistent, searchable data |
+| [x] | 5 | SQLite storage | Persistent, searchable data |
 | [ ] | 6 | Agent loop | Autonomous multi-step tasks |
 | [ ] | 7 | Stealth + rate limits | Lower block rate, free |
 | [ ] | 8 | Free-tier fallback | Graceful degradation on blocks |

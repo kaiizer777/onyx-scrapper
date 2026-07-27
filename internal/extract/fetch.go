@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -10,7 +11,7 @@ import (
 )
 
 // FetchStatic fetches static HTML from targetURL using colly HTTP collector.
-func FetchStatic(targetURL string) (string, error) {
+func FetchStatic(ctx context.Context, targetURL string) (string, error) {
 	c := colly.NewCollector(
 		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
 	)
@@ -50,13 +51,13 @@ func FetchStatic(targetURL string) (string, error) {
 // Fetch returns HTML for targetURL. If forceRender is true, it uses go-rod headless browser.
 // Otherwise it attempts static fetch first and falls back to go-rod browser if the static HTML
 // appears empty or JS-rendered (e.g. sparse body text / SPA mount tags).
-func Fetch(targetURL string, forceRender bool) (string, bool, error) {
+func Fetch(ctx context.Context, targetURL string, forceRender bool) (string, bool, error) {
 	if forceRender {
-		html, err := browser.FetchRendered(targetURL, 30*time.Second)
+		html, err := browser.FetchRendered(ctx, targetURL, 30*time.Second)
 		return html, true, err
 	}
 
-	staticHTML, err := FetchStatic(targetURL)
+	staticHTML, err := FetchStatic(ctx, targetURL)
 	if err == nil {
 		cleanText, cleanErr := CleanHTML(staticHTML)
 		if cleanErr == nil && isContentSufficient(staticHTML, cleanText) {
@@ -65,7 +66,7 @@ func Fetch(targetURL string, forceRender bool) (string, bool, error) {
 	}
 
 	// Fallback to go-rod rendered fetch
-	renderedHTML, err := browser.FetchRendered(targetURL, 30*time.Second)
+	renderedHTML, err := browser.FetchRendered(ctx, targetURL, 30*time.Second)
 	if err != nil {
 		if staticHTML != "" {
 			return staticHTML, false, nil

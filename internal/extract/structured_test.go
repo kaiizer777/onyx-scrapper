@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -16,7 +17,7 @@ type mockLLMClient struct {
 	history   [][]llm.Message
 }
 
-func (m *mockLLMClient) Chat(messages []llm.Message) (string, error) {
+func (m *mockLLMClient) Chat(_ context.Context, messages []llm.Message) (string, error) {
 	m.history = append(m.history, messages)
 	idx := m.callCount
 	m.callCount++
@@ -92,8 +93,9 @@ func TestExtractJSON_Success(t *testing.T) {
 		responses: []string{mockResp},
 	}
 
+	ctx := context.Background()
 	content := "<html><body><h1>Wireless Headphones</h1><p>Price: $149.99</p><p>Status: In Stock</p></body></html>"
-	rawJSON, err := ExtractJSON(client, content, "product")
+	rawJSON, err := ExtractJSON(ctx, client, content, "product")
 	if err != nil {
 		t.Fatalf("ExtractJSON failed: %v", err)
 	}
@@ -126,8 +128,9 @@ func TestExtractJSON_RetrySuccess(t *testing.T) {
 		responses: []string{invalidJSONResp, validJSONResp},
 	}
 
+	ctx := context.Background()
 	content := "Headphones details - Price $100, In Stock"
-	rawJSON, err := ExtractJSON(client, content, "product")
+	rawJSON, err := ExtractJSON(ctx, client, content, "product")
 	if err != nil {
 		t.Fatalf("ExtractJSON with retry failed: %v", err)
 	}
@@ -164,7 +167,8 @@ func TestExtractJSON_RetryFail(t *testing.T) {
 		responses: []string{invalidResp1, invalidResp2},
 	}
 
-	_, err := ExtractJSON(client, "some content", "product")
+	ctx := context.Background()
+	_, err := ExtractJSON(ctx, client, "some content", "product")
 	if err == nil {
 		t.Fatalf("expected ExtractJSON to fail when retry also returns invalid JSON, but it succeeded")
 	}

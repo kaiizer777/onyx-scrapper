@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -13,7 +14,7 @@ const MaxExtractContentCharLimit = 35000
 
 // LLMClient represents the interface required to perform LLM chat completions.
 type LLMClient interface {
-	Chat(messages []llm.Message) (string, error)
+	Chat(ctx context.Context, messages []llm.Message) (string, error)
 }
 
 // Extractor handles extracting structured JSON from text/HTML using an LLM.
@@ -27,13 +28,13 @@ func NewExtractor(client LLMClient) *Extractor {
 }
 
 // ExtractJSON extracts structured data matching schema from content.
-func (e *Extractor) ExtractJSON(content string, schema string) (json.RawMessage, error) {
-	return ExtractJSON(e.client, content, schema)
+func (e *Extractor) ExtractJSON(ctx context.Context, content string, schema string) (json.RawMessage, error) {
+	return ExtractJSON(ctx, e.client, content, schema)
 }
 
 // ExtractJSON sends page content and schema to the LLM model to return valid JSON matching the schema.
 // If the LLM response is invalid JSON, it retries once with an error-correction prompt.
-func ExtractJSON(client LLMClient, content string, schema string) (json.RawMessage, error) {
+func ExtractJSON(ctx context.Context, client LLMClient, content string, schema string) (json.RawMessage, error) {
 	if client == nil {
 		return nil, fmt.Errorf("llm client is required")
 	}
@@ -71,7 +72,7 @@ func ExtractJSON(client LLMClient, content string, schema string) (json.RawMessa
 		{Role: "user", Content: userPrompt},
 	}
 
-	rawResp, err := client.Chat(messages)
+	rawResp, err := client.Chat(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm chat error: %w", err)
 	}
@@ -96,7 +97,7 @@ func ExtractJSON(client LLMClient, content string, schema string) (json.RawMessa
 		llm.Message{Role: "user", Content: retryUserPrompt},
 	)
 
-	retryResp, err := client.Chat(messages)
+	retryResp, err := client.Chat(ctx, messages)
 	if err != nil {
 		return nil, fmt.Errorf("llm retry chat error: %w (original parse error: %v)", err, parseErr)
 	}

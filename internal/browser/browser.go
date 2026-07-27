@@ -13,7 +13,7 @@ import (
 
 // FetchRendered launches a stealth Chromium page using go-rod, navigates to targetURL,
 // waits for dynamic JS rendering to settle, and returns the rendered HTML.
-func FetchRendered(targetURL string, timeout time.Duration) (string, error) {
+func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration) (string, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
@@ -34,13 +34,18 @@ func FetchRendered(targetURL string, timeout time.Duration) (string, error) {
 	}
 	defer browser.MustClose()
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	bodyCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	browser = browser.Context(ctx)
+	browser = browser.Context(bodyCtx)
 
 	page, err := stealth.Page(browser)
 	if err != nil {
+		// stealth.Page may return a partial page object on error — close it to
+		// avoid leaking the underlying tab/resource before falling back.
+		if page != nil {
+			_ = page.Close()
+		}
 		page, err = browser.Page(proto.TargetCreateTarget{URL: targetURL})
 		if err != nil {
 			return "", fmt.Errorf("failed to create page: %w", err)

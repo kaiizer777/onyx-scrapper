@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -23,12 +24,12 @@ func NewFinder(client *llm.Client) *Finder {
 }
 
 // FindElement locates an element described by description within the raw HTML string using MiMo.
-func (f *Finder) FindElement(rawHTML string, description string) (string, error) {
-	return FindElement(f.client, rawHTML, description)
+func (f *Finder) FindElement(ctx context.Context, rawHTML string, description string) (string, error) {
+	return FindElement(ctx, f.client, rawHTML, description)
 }
 
 // FindElement sends simplified DOM and description to MiMo to extract a CSS selector or XPath.
-func FindElement(client *llm.Client, rawHTML string, description string) (string, error) {
+func FindElement(ctx context.Context, client *llm.Client, rawHTML string, description string) (string, error) {
 	if client == nil {
 		return "", fmt.Errorf("llm client is required")
 	}
@@ -59,7 +60,7 @@ Simplified DOM:
 		{Role: "user", Content: prompt},
 	}
 
-	rawResp, err := client.Chat(messages)
+	rawResp, err := client.Chat(ctx, messages)
 	if err != nil {
 		return "", fmt.Errorf("llm chat error: %w", err)
 	}

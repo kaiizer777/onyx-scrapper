@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -64,7 +65,7 @@ func NewClientFromConfigPath(path string) (*Client, error) {
 	return NewClient(cfg.OpenCodeZen), nil
 }
 
-func (c *Client) Chat(messages []Message) (string, error) {
+func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 	url := fmt.Sprintf("%s/chat/completions", c.baseURL)
 
 	reqBody := chatCompletionRequest{
@@ -77,7 +78,7 @@ func (c *Client) Chat(messages []Message) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create http request: %w", err)
 	}
