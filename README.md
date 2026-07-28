@@ -45,6 +45,8 @@
                      +-----------------------------------+
 ```
 
+> **Note:** Web search discovery (finding URLs from a query) is powered entirely by the self-hosted SearXNG instance. All other capabilities — browser rendering, stealth, semantic extraction, structured JSON output, storage, the agent loop, crawling, and concurrency — are implemented independently in Onyx's own codebase. SearXNG is a dependency for search-driven tasks only; direct URL fetching/extraction works without it.
+
 ---
 
 ## ✨ Features
@@ -77,10 +79,11 @@ docker-compose up -d
 SearXNG will run on `http://localhost:8888` with JSON format output enabled.
 
 ### Installation
+*(Note: This project was built and tested on Windows. The CLI examples below use `.\onyx.exe` for Windows. Linux/Mac users should use `./onyx` instead.)*
 ```bash
 git clone https://github.com/kaiizer777/onyx-scrapper.git
 cd onyx-scrapper
-go build -o onyx ./cmd/onyx
+go build -o onyx.exe ./cmd/onyx
 ```
 
 ### Configuration
@@ -88,9 +91,9 @@ Create `config.yaml` or `.env` in the root directory:
 
 ```yaml
 opencode_zen:
-  base_url: "https://api.xiaomimimo.com/v1"
-  api_key: "YOUR_MIMO_API_KEY"
-  model: "mimo-v2.5-pro"
+  base_url: https://opencode.ai/zen/v1
+  api_key: YOUR_API_KEY
+  default_model: mimo-v2.5-free
 
 scraperapi_key: "YOUR_SCRAPERAPI_KEY" # Optional free-tier fallback key
 ```
@@ -101,55 +104,61 @@ scraperapi_key: "YOUR_SCRAPERAPI_KEY" # Optional free-tier fallback key
 
 ### 1. Ping LLM Connection
 ```bash
-onyx ping
-onyx ping --json
+.\onyx.exe ping
+.\onyx.exe ping --json
 ```
 
 ### 2. Fetch & Clean Web Content
 ```bash
-onyx fetch https://example.com
-onyx fetch https://example.com --render
-onyx fetch https://example.com --json
+.\onyx.exe fetch https://example.com
+.\onyx.exe fetch https://example.com --render
+.\onyx.exe fetch https://example.com --json
 ```
 
 ### 3. Locate DOM Element via Natural Language
 ```bash
-onyx find https://example.com "the main login button"
-onyx find https://example.com "search input box" --render --json
+.\onyx.exe find https://example.com "the main login button"
+.\onyx.exe find https://example.com "search input box" --render --json
 ```
 
 ### 4. Extract Structured Data
 ```bash
-onyx extract https://example.com/product --schema product
-onyx extract https://news.ycombinator.com --schema article --json
+.\onyx.exe extract https://example.com/product --schema product
+.\onyx.exe extract https://news.ycombinator.com --schema article --json
 ```
 
 ### 5. Full-Text Search Saved Scrapes
 ```bash
-onyx search "golang scraping"
-onyx search "artificial intelligence" --json
+.\onyx.exe search "golang scraping"
+.\onyx.exe search "artificial intelligence" --json
 ```
 
 ### 6. Autonomous ReAct Agent
 ```bash
-onyx agent "go to news.ycombinator.com, find top story, and extract title"
-onyx agent "search for books on example.com" --max-steps 10 --json
+.\onyx.exe agent "go to news.ycombinator.com, find top story, and extract title"
+.\onyx.exe agent "search for books on example.com" --max-steps 10 --json
 ```
 
-### 7. Background Scheduler Daemon
+### 7. Crawl Site or Sitemap
 ```bash
-onyx schedule --config schedule.yaml
+.\onyx.exe crawl example.com --max-pages 50
+```
+*(Bare domains like `example.com` automatically get `https://` prepended)*
+
+### 8. Background Scheduler Daemon
+```bash
+.\onyx.exe schedule --config schedule.yaml
 ```
 
-### 8. HTTP API Server
+### 9. HTTP API Server
 ```bash
-onyx serve --port 9090
+.\onyx.exe serve --port 9090
 ```
 
-### 9. Stealth & Fallback Verification
+### 10. Stealth & Fallback Verification
 ```bash
-onyx test-stealth
-onyx test-fallback https://example.com
+.\onyx.exe test-stealth
+.\onyx.exe test-fallback https://example.com
 ```
 
 ---
@@ -158,11 +167,12 @@ onyx test-fallback https://example.com
 
 | Endpoint | Method | Description | Request Example |
 |---|---|---|---|
-| `/ping` | GET | Healthcheck endpoint | `curl http://localhost:9090/ping` |
+| `/ping` or `/health` | GET | Healthcheck endpoint | `curl http://localhost:9090/ping` |
 | `/search` | GET/POST | Query local database | `curl "http://localhost:9090/search?q=golang"` |
 | `/fetch` | POST | Fetch & clean URL content | `curl -X POST http://localhost:9090/fetch -H "Content-Type: application/json" -d '{"url":"https://example.com"}'` |
 | `/extract` | POST | Extract structured JSON | `curl -X POST http://localhost:9090/extract -H "Content-Type: application/json" -d '{"url":"https://example.com","schema":"article"}'` |
 | `/agent` | POST | Trigger autonomous agent | `curl -X POST http://localhost:9090/agent -H "Content-Type: application/json" -d '{"goal":"extract title from https://example.com"}'` |
+| `/crawl` | POST | Start background crawl | `curl -X POST http://localhost:9090/crawl -H "Content-Type: application/json" -d '{"url":"https://example.com"}'` |
 
 ---
 
@@ -192,6 +202,13 @@ jobs:
 - `pages_fts`: Virtual FTS5 search index (`url`, `clean_text`)
 - `agent_runs`: `id`, `goal`, `status`, `result`, `started_at`, `completed_at`
 - `agent_steps`: `id`, `run_id`, `step_number`, `action`, `args`, `thought`, `result`, `error`, `created_at`
+
+---
+
+## 🛠️ Known Issues Fixed During Testing
+
+- **Cloudflare Detection False-Positives:** Fixed a block-detection issue where Cloudflare vendor names triggered false positives; detection now correctly requires actual challenge-page signatures and short body length.
+- **Bare Domain Handling:** Bare domain URLs (e.g., `example.com`) without an `http://` or `https://` scheme now automatically prepend `https://` instead of causing a crash.
 
 ---
 
