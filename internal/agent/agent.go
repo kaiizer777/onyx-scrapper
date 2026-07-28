@@ -28,10 +28,11 @@ const (
 
 // Agent represents a ReAct agent runner.
 type Agent struct {
-	client    *llm.Client
-	store     *store.Store
-	searchSvc *searchpkg.Service
-	maxSteps  int
+	client        *llm.Client
+	store         *store.Store
+	searchSvc     *searchpkg.Service
+	maxSteps      int
+	subQuestionID int64
 }
 
 // Option configures Agent parameters.
@@ -43,6 +44,13 @@ func WithMaxSteps(steps int) Option {
 		if steps > 0 {
 			a.maxSteps = steps
 		}
+	}
+}
+
+// WithSubQuestionID links this agent execution to a research subquestion.
+func WithSubQuestionID(id int64) Option {
+	return func(a *Agent) {
+		a.subQuestionID = id
 	}
 }
 
@@ -107,6 +115,12 @@ type ExtractArgs struct {
 	Schema json.RawMessage `json:"schema"`
 }
 
+type RecordFindingArgs struct {
+	Claim      string  `json:"claim"`
+	SourceURL  string  `json:"source_url"`
+	Confidence float64 `json:"confidence"`
+}
+
 type DoneArgs struct {
 	Result string `json:"result"`
 }
@@ -164,7 +178,11 @@ You must reason step-by-step and respond ONLY with a single JSON object matching
 {
   "thought": "Explanation of your plan and reasoning for this step",
   "action": {
-    "name": "web_search|navigate|find_element|click|type|extract|done",
+    "name": "web_search|navigate|find_element|click|type|extract|done`
+	if a.subQuestionID > 0 {
+		systemPrompt += `|record_finding`
+	}
+	systemPrompt += `",
     "args": { ... }
   }
 }
@@ -176,7 +194,14 @@ Available actions and arguments:
 4. click: {"selector": "#id or .class", "description": "optional description if selector unknown"} - Clicks element.
 5. type: {"selector": "#id or .class", "description": "optional description", "text": "text to type", "press_enter": true|false} - Inputs text into field.
 6. extract: {"schema": "product|article|event|search-result-list or custom JSON schema"} - Extracts structured JSON from page.
-7. done: {"result": "Final summary answer or extracted data"} - Completes execution.
+7. done: {"result": "Final summary answer or extracted data"} - Completes execution.`
+	
+	if a.subQuestionID > 0 {
+		systemPrompt += `
+8. record_finding: {"claim": "clear factual statement", "source_url": "URL where claim is found", "confidence": 0.0-1.0} - Immediately saves a finding to the database without stopping the agent.`
+	}
+
+	systemPrompt += `
 
 Rules:
 - Respond strictly with valid JSON. No markdown code blocks surrounding the JSON unless required, but prefer raw JSON string.
@@ -192,7 +217,7 @@ Rules:
 	var finalStatus string = "running"
 
 	for stepNum := 1; stepNum <= a.maxSteps; stepNum++ {
-		stepCtx, stepCancel := context.WithTimeout(ctx, 45*time.Second)
+		stepCtx, stepCancel := context.WithTimeout(ctx, 5*time.Minute)
 		respStr, err := a.client.Chat(stepCtx, messages)
 		stepCancel()
 
@@ -284,6 +309,19 @@ Rules:
 					schemaStr = strVal
 				}
 				stepResult, stepErr = a.execExtract(ctx, page, schemaStr)
+			}
+			
+		case "record_finding":
+			var args RecordFindingArgs
+			if err := json.Unmarshal(actionResp.Action.Args, &args); err != nil {
+				stepErr = fmt.Errorf("invalid record_finding args: %w", err)
+			} else if a.subQuestionID == 0 {
+				stepErr = fmt.Errorf("record_finding is not available outside of deep research mode")
+			} else {
+				_, stepErr = a.store.SaveFinding(a.subQuestionID, args.Claim, args.SourceURL, args.Confidence)
+				if stepErr == nil {
+					stepResult = fmt.Sprintf("Successfully recorded finding: %q", args.Claim)
+				}
 			}
 
 		case "done":

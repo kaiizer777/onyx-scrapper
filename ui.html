@@ -438,17 +438,19 @@ function pollAgentRun(runId) {
         agentTrace.querySelectorAll('.step-card.active').forEach(c => c.classList.remove('active'));
 
         // Show final result banner
-        if (run.result) {
+        if (run.status === 'completed') {
           const banner = document.createElement('div');
           banner.className = 'done-banner';
           banner.innerHTML = `<div class="done-label">◆ Goal achieved</div><div class="done-result">${esc(run.result)}</div>`;
           agentTrace.appendChild(banner);
           banner.scrollIntoView({behavior:'smooth', block:'nearest'});
-        } else if (run.status === 'failed') {
+        } else {
           const banner = document.createElement('div');
           banner.className = 'done-banner';
+          banner.style.borderLeftColor = '#ef4444';
           banner.innerHTML = `<div class="done-label" style="color:#ef4444">✕ Failed</div><div class="done-result">${esc(run.result || 'Agent run failed.')}</div>`;
           agentTrace.appendChild(banner);
+          banner.scrollIntoView({behavior:'smooth', block:'nearest'});
         }
 
         agentRunBtn.disabled = false;
@@ -676,7 +678,11 @@ async function openRunDetail(runId) {
     }
 
     if (run.result) {
-      html += `<div class="done-banner" style="margin-top:12px"><div class="done-label">◆ Result</div><div class="done-result">${esc(run.result)}</div></div>`;
+      if (run.status === 'completed') {
+        html += `<div class="done-banner" style="margin-top:12px"><div class="done-label">◆ Result</div><div class="done-result">${esc(run.result)}</div></div>`;
+      } else {
+        html += `<div class="done-banner" style="margin-top:12px;border-left-color:#ef4444"><div class="done-label" style="color:#ef4444">✕ Failed</div><div class="done-result">${esc(run.result)}</div></div>`;
+      }
     }
 
     modalContent.innerHTML = html;

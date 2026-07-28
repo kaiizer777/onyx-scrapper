@@ -58,6 +58,31 @@ type AgentStep struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type ResearchRun struct {
+	ID          int64      `json:"id"`
+	Goal        string     `json:"goal"`
+	Status      string     `json:"status"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	ReportMD    string     `json:"report_md"`
+}
+
+type ResearchSubQuestion struct {
+	ID       int64  `json:"id"`
+	RunID    int64  `json:"run_id"`
+	Question string `json:"question"`
+	Status   string `json:"status"` // pending, running, done, failed
+}
+
+type Finding struct {
+	ID            int64     `json:"id"`
+	SubQuestionID int64     `json:"subquestion_id"`
+	Claim         string    `json:"claim"`
+	SourceURL     string    `json:"source_url"`
+	Confidence    float64   `json:"confidence"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
 type Store struct {
 	db      *sql.DB
 	writeMu sync.Mutex
@@ -325,5 +350,131 @@ func (s *Store) GetAgentRuns(limit int) ([]AgentRun, error) {
 		return nil, fmt.Errorf("error iterating agent runs: %w", err)
 	}
 	return runs, nil
+}
+
+// CreateResearchRun starts a new research run.
+func (s *Store) CreateResearchRun(goal string) (int64, error) {
+	now := time.Now().UTC()
+	query := `INSERT INTO research_runs (goal, status, started_at, report_md) VALUES (?, 'running', ?, '') RETURNING id;`
+	var runID int64
+	err := s.db.QueryRow(query, goal, now).Scan(&runID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create research run: %w", err)
+	}
+	return runID, nil
+}
+
+func (s *Store) UpdateResearchRunStatus(runID int64, status string, reportMD string) error {
+	now := time.Now().UTC()
+	var query string
+	if status == "completed" || status == "failed" || status == "max_steps_exceeded" {
+		query = `UPDATE research_runs SET status = ?, report_md = ?, completed_at = ? WHERE id = ?;`
+		_, err := s.db.Exec(query, status, reportMD, now, runID)
+		return err
+	}
+	query = `UPDATE research_runs SET status = ?, report_md = ? WHERE id = ?;`
+	_, err := s.db.Exec(query, status, reportMD, runID)
+	return err
+}
+
+func (s *Store) GetResearchRun(runID int64) (*ResearchRun, error) {
+	query := `SELECT id, goal, status, started_at, completed_at, report_md FROM research_runs WHERE id = ?`
+	row := s.db.QueryRow(query, runID)
+	var r ResearchRun
+	err := row.Scan(&r.ID, &r.Goal, &r.Status, &r.StartedAt, &r.CompletedAt, &r.ReportMD)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func (s *Store) CreateSubQuestion(runID int64, question string) (int64, error) {
+	query := `INSERT INTO research_subquestions (run_id, question, status) VALUES (?, ?, 'pending') RETURNING id;`
+	var sqID int64
+	err := s.db.QueryRow(query, runID, question).Scan(&sqID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create subquestion: %w", err)
+	}
+	return sqID, nil
+}
+
+func (s *Store) UpdateSubQuestionStatus(sqID int64, status string) error {
+	query := `UPDATE research_subquestions SET status = ? WHERE id = ?;`
+	_, err := s.db.Exec(query, status, sqID)
+	return err
+}
+
+func (s *Store) GetSubQuestionsForRun(runID int64) ([]ResearchSubQuestion, error) {
+	query := `SELECT id, run_id, question, status FROM research_subquestions WHERE run_id = ? ORDER BY id ASC`
+	rows, err := s.db.Query(query, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sqs []ResearchSubQuestion
+	for rows.Next() {
+		var sq ResearchSubQuestion
+		if err := rows.Scan(&sq.ID, &sq.RunID, &sq.Question, &sq.Status); err != nil {
+			return nil, err
+		}
+		sqs = append(sqs, sq)
+	}
+	return sqs, nil
+}
+
+func (s *Store) SaveFinding(sqID int64, claim, sourceURL string, confidence float64) (int64, error) {
+	now := time.Now().UTC()
+	query := `INSERT INTO findings (subquestion_id, claim, source_url, confidence, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id;`
+	var fID int64
+	err := s.db.QueryRow(query, sqID, claim, sourceURL, confidence, now).Scan(&fID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to save finding: %w", err)
+	}
+	return fID, nil
+}
+
+func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
+	query := `SELECT id, subquestion_id, claim, source_url, confidence, created_at FROM findings WHERE subquestion_id = ? ORDER BY id ASC`
+	rows, err := s.db.Query(query, sqID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var fs []Finding
+	for rows.Next() {
+		var f Finding
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.Confidence, &f.CreatedAt); err != nil {
+			return nil, err
+		}
+		fs = append(fs, f)
+	}
+	return fs, nil
+}
+
+func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
+	query := `
+		SELECT f.id, f.subquestion_id, f.claim, f.source_url, f.confidence, f.created_at 
+		FROM findings f
+		JOIN research_subquestions sq ON f.subquestion_id = sq.id
+		WHERE sq.run_id = ?
+		ORDER BY f.id ASC
+	`
+	rows, err := s.db.Query(query, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var fs []Finding
+	for rows.Next() {
+		var f Finding
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.Confidence, &f.CreatedAt); err != nil {
+			return nil, err
+		}
+		fs = append(fs, f)
+	}
+	return fs, nil
 }
 

@@ -27,6 +27,7 @@ var BlockedKeywords = []string{
 	"please turn javascript on and reload",
 	"bot detection",
 	"checking your browser before accessing",
+	"datadome",
 	"ddos protection by",
 	"checking if the site connection is secure",
 }

@@ -286,3 +286,4 @@ Each step below = one coding session. Don't skip ahead — each step produces a 
 | [x] | 11 | SearXNG search | Real web search, unlimited, free |
 | [x] | 12 | Site/sitemap crawling | Auto-discover & ingest full domains |
 | [x] | 13 | Concurrent browser pool | Real parallel scraping |
+| [x] | 14 | Deep Research Mode | Orchestrator/Worker parallel research |

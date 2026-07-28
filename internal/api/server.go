@@ -15,6 +15,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/crawl"
 	"github.com/kaiizer777/onyx-scrapper/internal/extract"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/research"
 	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
@@ -85,6 +86,8 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("/agent/runs", s.corsMiddleware(s.handleAgentRuns))
 	mux.HandleFunc("/agent/runs/{id}", s.corsMiddleware(s.handleAgentRunDetail))
 	mux.HandleFunc("/crawl", s.corsMiddleware(s.handleCrawl))
+	mux.HandleFunc("/deep-research", s.corsMiddleware(s.handleDeepResearch))
+	mux.HandleFunc("/deep-research/{id}", s.corsMiddleware(s.handleDeepResearchDetail))
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
 
 	// Wrap mux: serve ui.html at root without registering "GET /" in the mux
@@ -608,5 +611,112 @@ func (s *Server) handleCrawl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, res)
+}
+
+type deepResearchRequest struct {
+	Query        string `json:"query"`
+	MaxQuestions int    `json:"max_questions"`
+}
+
+func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+
+	var req deepResearchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	req.Query = strings.TrimSpace(req.Query)
+	if req.Query == "" {
+		writeError(w, http.StatusBadRequest, "field 'query' is required")
+		return
+	}
+
+	if req.MaxQuestions <= 0 {
+		req.MaxQuestions = 6
+	}
+
+	if s.client == nil || s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
+		return
+	}
+
+	orchestrator := research.NewOrchestrator(s.client, s.store, s.searchSvc)
+	
+	// Create run ID
+	runID, err := s.store.CreateResearchRun(req.Query)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create run: %v", err))
+		return
+	}
+
+	opts := research.Options{
+		MaxSubQuestions: req.MaxQuestions,
+		ResumeRunID:     runID,
+	}
+
+	go func() {
+		_, _ = orchestrator.Run(context.Background(), req.Query, opts)
+	}()
+
+	w.WriteHeader(http.StatusAccepted) // 202
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"run_id": runID,
+		"status": "running",
+	})
+}
+
+func (s *Server) handleDeepResearchDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not configured")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+
+	runID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid run id")
+		return
+	}
+
+	run, err := s.store.GetResearchRun(runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get run: %v", err))
+		return
+	}
+	if run == nil {
+		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+
+	sqs, _ := s.store.GetSubQuestionsForRun(runID)
+	if sqs == nil {
+		sqs = []store.ResearchSubQuestion{}
+	}
+	
+	findings, _ := s.store.GetAllFindingsForRun(runID)
+	if findings == nil {
+		findings = []store.Finding{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run":           run,
+		"sub_questions": sqs,
+		"findings":      findings,
+	})
 }
 

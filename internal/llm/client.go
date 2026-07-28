@@ -78,40 +78,83 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
-	if err != nil {
-		return "", fmt.Errorf("failed to create http request: %w", err)
-	}
+	maxRetries := 10
+	backoff := 1 * time.Second
+	maxBackoff := 30 * time.Second
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
-
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("http request error: %w", err)
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	var chatResp chatCompletionResponse
-	if err := json.Unmarshal(bodyBytes, &chatResp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w (raw body: %s)", err, string(bodyBytes))
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		if chatResp.Error != nil && chatResp.Error.Message != "" {
-			return "", fmt.Errorf("api error (status %d): %s", resp.StatusCode, chatResp.Error.Message)
+	for attempt := 1; attempt <= maxRetries+1; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonBytes))
+		if err != nil {
+			return "", fmt.Errorf("failed to create http request: %w", err)
 		}
-		return "", fmt.Errorf("api error (status %d): %s", resp.StatusCode, string(bodyBytes))
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+
+		resp, reqErr := c.hc.Do(req)
+
+		var retryable bool
+		var errStr string
+
+		if reqErr != nil {
+			retryable = true
+			errStr = reqErr.Error()
+		} else {
+			bodyBytes, readErr := io.ReadAll(resp.Body)
+			resp.Body.Close()
+
+			if readErr != nil {
+				retryable = true
+				errStr = fmt.Sprintf("failed to read response body: %v", readErr)
+			} else if resp.StatusCode != http.StatusOK {
+				var chatResp chatCompletionResponse
+				_ = json.Unmarshal(bodyBytes, &chatResp)
+
+				if chatResp.Error != nil && chatResp.Error.Message != "" {
+					errStr = fmt.Sprintf("api error (status %d): %s", resp.StatusCode, chatResp.Error.Message)
+				} else {
+					errStr = fmt.Sprintf("api error (status %d): %s", resp.StatusCode, string(bodyBytes))
+				}
+
+				if resp.StatusCode >= 500 {
+					retryable = true
+				} else {
+					retryable = false // e.g., 4xx errors
+				}
+			} else {
+				var chatResp chatCompletionResponse
+				if unmarshalErr := json.Unmarshal(bodyBytes, &chatResp); unmarshalErr != nil {
+					return "", fmt.Errorf("failed to unmarshal response: %w (raw body: %s)", unmarshalErr, string(bodyBytes))
+				}
+
+				if len(chatResp.Choices) == 0 {
+					return "", fmt.Errorf("empty choices returned from model")
+				}
+
+				return chatResp.Choices[0].Message.Content, nil
+			}
+		}
+
+		if !retryable || attempt > maxRetries {
+			if !retryable {
+				return "", fmt.Errorf("%s", errStr)
+			}
+			return "", fmt.Errorf("max retries exhausted. last error: %s", errStr)
+		}
+
+		fmt.Printf("[RETRY] Attempt %d failed: %s. Retrying in %v...\n", attempt, errStr, backoff)
+
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("context cancelled during retry backoff: %w", ctx.Err())
+		case <-time.After(backoff):
+		}
+
+		backoff *= 2
+		if backoff > maxBackoff {
+			backoff = maxBackoff
+		}
 	}
 
-	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("empty choices returned from model")
-	}
-
-	return chatResp.Choices[0].Message.Content, nil
+	return "", fmt.Errorf("unreachable")
 }

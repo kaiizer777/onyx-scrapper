@@ -57,3 +57,29 @@ CREATE TABLE IF NOT EXISTS agent_steps (
     FOREIGN KEY(run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS research_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    goal TEXT,
+    status TEXT,
+    started_at DATETIME,
+    completed_at DATETIME,
+    report_md TEXT
+);
+
+CREATE TABLE IF NOT EXISTS research_subquestions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    question TEXT,
+    status TEXT,
+    FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subquestion_id INTEGER,
+    claim TEXT,
+    source_url TEXT,
+    confidence REAL,
+    created_at DATETIME,
+    FOREIGN KEY(subquestion_id) REFERENCES research_subquestions(id) ON DELETE CASCADE
+);
