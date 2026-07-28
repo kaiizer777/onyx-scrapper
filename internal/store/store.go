@@ -67,6 +67,13 @@ type ResearchRun struct {
 	ReportMD    string     `json:"report_md"`
 }
 
+type Stats struct {
+	PagesScraped     int
+	ExtractionsDone  int
+	AgentRuns        int
+	DeepResearchRuns int
+}
+
 type ResearchSubQuestion struct {
 	ID       int64  `json:"id"`
 	RunID    int64  `json:"run_id"`
@@ -170,6 +177,52 @@ func (s *Store) GetPageByURL(url string) (*Page, error) {
 	return &p, nil
 }
 
+// GetPageByID retrieves a saved page by its database ID.
+func (s *Store) GetPageByID(id int64) (*Page, error) {
+	query := `SELECT id, url, fetched_at, raw_html, clean_text FROM pages WHERE id = ?`
+	row := s.db.QueryRow(query, id)
+
+	var p Page
+	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get page by id %d: %w", id, err)
+	}
+
+	return &p, nil
+}
+
+// GetRecentPages retrieves recent scraped pages.
+func (s *Store) GetRecentPages(limit, offset int) ([]Page, error) {
+	query := `
+		SELECT id, url, fetched_at, raw_html, clean_text 
+		FROM pages 
+		ORDER BY fetched_at DESC 
+		LIMIT ? OFFSET ?
+	`
+	rows, err := s.db.Query(query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query recent pages: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []Page
+	for rows.Next() {
+		var p Page
+		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText); err != nil {
+			return nil, fmt.Errorf("failed to scan page: %w", err)
+		}
+		pages = append(pages, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating pages: %w", err)
+	}
+
+	return pages, nil
+}
+
 // SaveExtraction inserts a structured JSON extraction result linked to a page ID.
 func (s *Store) SaveExtraction(pageID int64, schemaName, dataJSON string) (int64, error) {
 	s.writeMu.Lock()
@@ -189,6 +242,35 @@ func (s *Store) SaveExtraction(pageID int64, schemaName, dataJSON string) (int64
 	}
 
 	return extractionID, nil
+}
+
+// GetExtractionsForPage retrieves all extractions linked to a given page ID.
+func (s *Store) GetExtractionsForPage(pageID int64) ([]Extraction, error) {
+	query := `
+		SELECT id, page_id, schema_name, data_json, created_at
+		FROM extractions
+		WHERE page_id = ?
+		ORDER BY created_at DESC;
+	`
+	rows, err := s.db.Query(query, pageID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query extractions for page %d: %w", pageID, err)
+	}
+	defer rows.Close()
+
+	var extractions []Extraction
+	for rows.Next() {
+		var e Extraction
+		if err := rows.Scan(&e.ID, &e.PageID, &e.SchemaName, &e.DataJSON, &e.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan extraction: %w", err)
+		}
+		extractions = append(extractions, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating extractions: %w", err)
+	}
+
+	return extractions, nil
 }
 
 // SearchPages executes a SQLite FTS5 query over saved pages and returns matching results with snippets.
@@ -391,6 +473,37 @@ func (s *Store) GetResearchRun(runID int64) (*ResearchRun, error) {
 	return &r, nil
 }
 
+// GetRecentResearchRuns retrieves recent deep research runs ordered by most recent first.
+func (s *Store) GetRecentResearchRuns(limit int) ([]ResearchRun, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := `
+		SELECT id, goal, status, started_at, completed_at, report_md
+		FROM research_runs
+		ORDER BY id DESC
+		LIMIT ?;
+	`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query research runs: %w", err)
+	}
+	defer rows.Close()
+
+	var runs []ResearchRun
+	for rows.Next() {
+		var r ResearchRun
+		if err := rows.Scan(&r.ID, &r.Goal, &r.Status, &r.StartedAt, &r.CompletedAt, &r.ReportMD); err != nil {
+			return nil, fmt.Errorf("failed to scan research run: %w", err)
+		}
+		runs = append(runs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating research runs: %w", err)
+	}
+	return runs, nil
+}
+
 func (s *Store) CreateSubQuestion(runID int64, question string) (int64, error) {
 	query := `INSERT INTO research_subquestions (run_id, question, status) VALUES (?, ?, 'pending') RETURNING id;`
 	var sqID int64
@@ -478,3 +591,24 @@ func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
 	return fs, nil
 }
 
+// GetStats returns aggregated counts of the database records for the dashboard.
+func (s *Store) GetStats() (Stats, error) {
+	var stats Stats
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pages`).Scan(&stats.PagesScraped)
+	if err != nil {
+		return stats, fmt.Errorf("failed to count pages: %w", err)
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM extractions`).Scan(&stats.ExtractionsDone)
+	if err != nil {
+		return stats, fmt.Errorf("failed to count extractions: %w", err)
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM agent_runs`).Scan(&stats.AgentRuns)
+	if err != nil {
+		return stats, fmt.Errorf("failed to count agent runs: %w", err)
+	}
+	err = s.db.QueryRow(`SELECT COUNT(*) FROM research_runs`).Scan(&stats.DeepResearchRuns)
+	if err != nil {
+		return stats, fmt.Errorf("failed to count research runs: %w", err)
+	}
+	return stats, nil
+}

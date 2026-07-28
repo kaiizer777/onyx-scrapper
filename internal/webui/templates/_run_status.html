@@ -1,0 +1,79 @@
+{{if eq .Type "agent"}}
+    {{if eq .Status "running"}}
+        <p aria-busy="true">Agent is running...</p>
+    {{else}}
+        <p>Run completed with status: <span class="status-pill status-{{.Status}}">{{.Status}}</span></p>
+    {{end}}
+    
+    <div class="log-box" id="log-container">
+{{range .Steps}}
+<strong>[Step {{.StepNumber}}] {{.Action}}</strong>
+{{if .ArgsJSON}}Args: {{.ArgsJSON}}{{end}}
+{{if .Error}}<span style="color: var(--pico-del-color);">Error: {{.Error}}</span>{{end}}
+{{if .Result}}Result: {{.Result}}{{end}}
+<hr>
+{{end}}
+    </div>
+    
+    {{if .Result}}
+    <details open>
+        <summary>Final Result</summary>
+        <div class="log-box">{{.Result}}</div>
+    </details>
+    {{end}}
+
+{{else if eq .Type "research"}}
+    {{if eq .Status "running"}}
+        <p aria-busy="true">Research in progress...</p>
+    {{else}}
+        <p>Research completed with status: <span class="status-pill status-{{.Status}}">{{.Status}}</span></p>
+    {{end}}
+
+    <h4>Sub-Questions</h4>
+    <ul>
+    {{range .SubQuestions}}
+        <li>
+            <span class="status-pill status-{{.Status}}">{{.Status}}</span> 
+            {{.Question}}
+        </li>
+    {{end}}
+    </ul>
+
+    {{if .Findings}}
+    <h4>Key Findings</h4>
+    <ul>
+    {{range .Findings}}
+        <li>{{.Claim}} <small>(<a href="{{.SourceURL}}" target="_blank">Source</a>, Conf: {{.Confidence}})</small></li>
+    {{end}}
+    </ul>
+    {{end}}
+
+    {{if .ReportHTML}}
+    <article>
+        <header>Final Report</header>
+        <div class="markdown-body">
+            {{.ReportHTML}}
+        </div>
+    </article>
+    {{end}}
+{{end}}
+
+{{if eq .Status "running"}}
+<script>
+    // Auto-scroll the log container if present
+    var logBox = document.getElementById('log-container');
+    if(logBox) {
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+</script>
+{{else}}
+<script>
+    // Stop HTMX polling if the run is completed
+    var statusDiv = document.getElementById('live-status');
+    if (statusDiv) {
+        statusDiv.removeAttribute('hx-trigger');
+        statusDiv.removeAttribute('hx-get');
+        htmx.process(statusDiv);
+    }
+</script>
+{{end}}

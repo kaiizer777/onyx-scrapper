@@ -1,0 +1,65 @@
+{{define "content"}}
+<h2>Deep Research</h2>
+
+<article>
+    <header>Start Deep Research</header>
+    <form action="/ui/research" method="POST" class="inline-form">
+        <div style="flex: 2;">
+            <input type="text" name="query" placeholder="Research Query (e.g. Analysis of real estate market in NY)" required>
+        </div>
+        <div>
+            <input type="number" name="max_questions" placeholder="Max Sub-Questions (default 6)">
+        </div>
+        <button type="submit">Start</button>
+    </form>
+</article>
+
+{{if .RunDetail}}
+    <h3>Research Run #{{.RunDetail.Run.ID}}</h3>
+    <article>
+        <header>
+            <strong>Goal:</strong> {{.RunDetail.Run.Goal}}
+            <span class="status-pill status-{{.RunDetail.Run.Status}}">{{.RunDetail.Run.Status}}</span>
+        </header>
+        
+        <div id="live-status" 
+             hx-get="/ui/research/{{.RunDetail.Run.ID}}/status" 
+             hx-trigger="every 1s" 
+             hx-swap="innerHTML">
+            <!-- HTMX will inject _run_status.html here -->
+            <p aria-busy="true">Loading status...</p>
+        </div>
+        
+    </article>
+{{else}}
+    <figure>
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Goal</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Started At</th>
+                    <th scope="col">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Runs}}
+                <tr>
+                    <td>{{.ID}}</td>
+                    <td>{{.Goal}}</td>
+                    <td><span class="status-pill status-{{.Status}}">{{.Status}}</span></td>
+                    <td>{{.StartedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td><a href="/ui/research/{{.ID}}" role="button" class="outline">View</a></td>
+                </tr>
+                {{end}}
+                {{if not .Runs}}
+                <tr>
+                    <td colspan="5">No research runs found.</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </figure>
+{{end}}
+{{end}}

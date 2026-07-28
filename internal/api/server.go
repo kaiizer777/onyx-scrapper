@@ -18,6 +18,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/research"
 	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/webui"
 )
 
 // Server represents the Onyx Scrapper local HTTP API server.
@@ -89,6 +90,13 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("/deep-research", s.corsMiddleware(s.handleDeepResearch))
 	mux.HandleFunc("/deep-research/{id}", s.corsMiddleware(s.handleDeepResearchDetail))
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
+
+	uiHandler, err := webui.NewUIHandler(s.store, s.client, s.searchSvc)
+	if err == nil {
+		uiHandler.RegisterRoutes(mux)
+	} else {
+		slog.Warn("Failed to initialize Web UI handler", "error", err)
+	}
 
 	// Wrap mux: serve ui.html at root without registering "GET /" in the mux
 	// ("GET /" conflicts with method-less patterns like /health in Go 1.22+ ServeMux)
