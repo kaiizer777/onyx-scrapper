@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx — Research Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --void:#0a0a0c;--slab:#131318;--grain:#1c1c24;
+  --chalk:#c8c8d4;--smoke:#6e6e80;--ember:#e85d3a;
+  --ember-dim:rgba(232,93,58,0.12);--ember-glow:rgba(232,93,58,0.25);
+  --font-display:'DM Sans',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','Fira Code',monospace;
+  --sidebar-w:200px;--status-h:40px;--footer-h:32px;
+}
+::selection{background:var(--ember);color:var(--void)}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:var(--font-mono);font-size:13px;line-height:1.5;
+  color:var(--chalk);background:var(--void);
+}
+/* Focus */
+:focus-visible{outline:2px solid var(--ember);outline-offset:2px;border-radius:2px}
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--slab)}
+::-webkit-scrollbar-thumb{background:var(--grain);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--smoke)}
+
+/* ── Layout ── */
+.app{display:grid;height:100vh;grid-template-columns:var(--sidebar-w) 1fr;grid-template-rows:var(--status-h) 1fr var(--footer-h);grid-template-areas:"status status" "sidebar main" "footer footer"}
+
+/* ── Status Bar ── */
+.status-bar{
+  grid-area:status;display:flex;align-items:center;gap:16px;
+  padding:0 16px;background:var(--slab);border-bottom:1px solid var(--grain);
+  font-size:11px;font-family:var(--font-mono);color:var(--smoke);
+}
+.status-bar .logo{font-family:var(--font-display);font-weight:700;font-size:14px;color:var(--chalk);letter-spacing:-0.02em;margin-right:auto}
+.status-bar .logo .diamond{color:var(--ember);margin-right:4px}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:10px;background:var(--grain);font-size:10px;letter-spacing:0.03em;text-transform:uppercase}
+.pill .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pill .dot.up{background:#4ade80}
+.pill .dot.down{background:#ef4444}
+.pill .dot.checking{background:var(--smoke);animation:pulse 1.2s ease infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+/* ── Sidebar ── */
+.sidebar{
+  grid-area:sidebar;background:var(--slab);border-right:1px solid var(--grain);
+  display:flex;flex-direction:column;padding:12px 0;gap:2px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 20px;cursor:pointer;border:none;background:none;
+  font-family:var(--font-mono);font-size:12px;font-weight:500;
+  color:var(--smoke);letter-spacing:0.04em;text-transform:uppercase;
+  transition:color .15s,background .15s;border-left:2px solid transparent;
+}
+.nav-item:hover{color:var(--chalk);background:var(--grain)}
+.nav-item.active{color:var(--chalk);border-left-color:var(--ember);background:var(--grain)}
+.nav-item .key{font-size:10px;color:var(--smoke);margin-left:auto;opacity:.5}
+
+/* ── Main ── */
+.main{grid-area:main;overflow-y:auto;padding:24px 32px;display:flex;flex-direction:column;gap:20px}
+.panel{display:none;flex-direction:column;gap:20px;flex:1}
+.panel.active{display:flex}
+
+/* ── Section Headers ── */
+.section-label{
+  font-family:var(--font-display);font-weight:700;font-size:11px;
+  letter-spacing:0.08em;text-transform:uppercase;color:var(--smoke);
+}
+
+/* ── Input Row ── */
+.input-row{display:flex;gap:8px;align-items:stretch}
+.input-field{
+  flex:1;background:var(--slab);border:1px solid var(--grain);border-radius:4px;
+  padding:10px 14px;font-family:var(--font-mono);font-size:13px;color:var(--chalk);
+  transition:border-color .15s;
+}
+.input-field::placeholder{color:var(--smoke)}
+.input-field:focus{border-color:var(--ember);outline:none}
+select.input-field{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236e6e80'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.btn{
+  padding:10px 20px;border:none;border-radius:4px;cursor:pointer;
+  font-family:var(--font-mono);font-size:12px;font-weight:600;
+  letter-spacing:0.04em;text-transform:uppercase;
+  transition:background .15s,transform .1s;
+}
+.btn:active{transform:scale(0.97)}
+.btn-primary{background:var(--ember);color:var(--void)}
+.btn-primary:hover{background:#d14f30}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-secondary{background:var(--grain);color:var(--chalk)}
+.btn-secondary:hover{background:#25252f}
+
+/* ── Step Trace (signature element) ── */
+.step-trace{display:flex;flex-direction:column;gap:12px}
+.step-card{
+  background:var(--slab);border:1px solid var(--grain);border-radius:4px;
+  border-left:3px solid var(--smoke);overflow:hidden;
+  transition:border-left-color .3s;
+}
+.step-card.active{border-left-color:var(--ember);box-shadow:0 0 20px var(--ember-dim)}
+.step-card.done{border-left-color:var(--smoke)}
+.step-card.error{border-left-color:#ef4444}
+.step-header{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--grain);font-size:11px;
+}
+.step-num{
+  font-family:var(--font-display);font-weight:700;font-size:10px;
+  color:var(--smoke);letter-spacing:0.06em;text-transform:uppercase;
+}
+.step-action{
+  font-weight:500;color:var(--chalk);background:var(--grain);
+  padding:1px 8px;border-radius:3px;font-size:11px;
+}
+.step-card.active .step-action{background:var(--ember-dim);color:var(--ember)}
+.step-body{padding:10px 14px;font-size:12px;line-height:1.6}
+.step-thought{color:var(--smoke);font-style:italic;margin-bottom:6px;padding-left:10px;border-left:2px solid var(--grain)}
+.step-args{color:var(--chalk);font-size:11px;background:var(--void);padding:6px 10px;border-radius:3px;margin-bottom:6px;white-space:pre-wrap;word-break:break-all;max-height:120px;overflow-y:auto}
+.step-result{color:var(--chalk);font-size:11px;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-word}
+.step-error{color:#ef4444}
+.step-card.active .step-header{position:relative}
+.step-card.active .step-header::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--ember),transparent);
+  animation:ember-sweep 1.5s ease infinite;
+}
+@keyframes ember-sweep{0%{opacity:1;transform:translateX(-100%)}100%{opacity:0;transform:translateX(100%)}}
+
+/* ── Done Banner ── */
+.done-banner{
+  background:var(--slab);border:1px solid var(--grain);border-left:3px solid var(--ember);
+  border-radius:4px;padding:16px 20px;
+}
+.done-banner .done-label{font-family:var(--font-display);font-weight:700;font-size:11px;color:var(--ember);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px}
+.done-banner .done-result{font-size:13px;line-height:1.7;color:var(--chalk);white-space:pre-wrap}
+
+/* ── Results List ── */
+.results-list{display:flex;flex-direction:column;gap:8px}
+.result-item{
+  background:var(--slab);border:1px solid var(--grain);border-radius:4px;
+  padding:12px 16px;transition:border-color .15s;
+}
+.result-item:hover{border-color:var(--smoke)}
+.result-title{font-weight:500;margin-bottom:4px}
+.result-title a{color:var(--chalk);text-decoration:none}
+.result-title a:hover{color:var(--ember)}
+.result-url{font-size:11px;color:var(--smoke);margin-bottom:6px;word-break:break-all}
+.result-snippet{font-size:12px;color:var(--smoke);line-height:1.5}
+
+/* ── Extract Output ── */
+.extract-output{
+  background:var(--slab);border:1px solid var(--grain);border-radius:4px;
+  padding:16px 20px;overflow-x:auto;
+}
+.extract-output .kv-row{display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--grain)}
+.extract-output .kv-row:last-child{border-bottom:none}
+.extract-output .kv-key{color:var(--smoke);min-width:140px;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:0.04em}
+.extract-output .kv-val{color:var(--chalk);font-size:12px;word-break:break-word}
+.extract-output .kv-val.array{display:flex;flex-direction:column;gap:2px}
+
+/* ── Run Detail Modal ── */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(10,10,12,0.85);z-index:100;
+  display:none;align-items:flex-start;justify-content:center;padding:40px;
+  overflow-y:auto;
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:var(--slab);border:1px solid var(--grain);border-radius:6px;
+  width:100%;max-width:800px;display:flex;flex-direction:column;gap:16px;
+  padding:24px;position:relative;
+}
+.modal-close{
+  position:absolute;top:12px;right:16px;background:none;border:none;
+  color:var(--smoke);cursor:pointer;font-size:18px;
+}
+.modal-close:hover{color:var(--chalk)}
+
+/* ── Empty States ── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:60px 20px;text-align:center;
+}
+.empty-state .icon{font-size:32px;opacity:.3}
+.empty-state .prompt{font-size:13px;color:var(--smoke);max-width:320px;line-height:1.6}
+.empty-state .prompt strong{color:var(--chalk)}
+
+/* ── Loading Dots ── */
+.loading-dots{display:inline-flex;gap:4px;align-items:center}
+.loading-dots span{width:4px;height:4px;border-radius:50%;background:var(--ember);animation:dot-bounce 1.2s ease infinite}
+.loading-dots span:nth-child(2){animation-delay:.2s}
+.loading-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dot-bounce{0%,80%,100%{transform:scale(0.6);opacity:.3}40%{transform:scale(1);opacity:1}}
+
+/* ── History Items ── */
+.history-item{
+  background:var(--slab);border:1px solid var(--grain);border-radius:4px;
+  padding:12px 16px;cursor:pointer;transition:border-color .15s;
+  display:flex;flex-direction:column;gap:4px;
+}
+.history-item:hover{border-color:var(--smoke)}
+.history-goal{font-size:13px;color:var(--chalk)}
+.history-meta{display:flex;gap:12px;font-size:10px;color:var(--smoke);text-transform:uppercase;letter-spacing:0.04em}
+.history-status{font-weight:600}
+.history-status.completed{color:#4ade80}
+.history-status.failed{color:#ef4444}
+.history-status.running{color:var(--ember)}
+
+/* ── Footer ── */
+.footer{
+  grid-area:footer;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;font-size:10px;color:var(--smoke);background:var(--slab);
+  border-top:1px solid var(--grain);
+}
+.footer .left{display:flex;align-items:center;gap:6px}
+.footer .diamond{color:var(--ember)}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  :root{--sidebar-w:52px}
+  .nav-item .label,.nav-item .key{display:none}
+  .nav-item{justify-content:center;padding:10px 0}
+  .main{padding:16px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div class="logo"><span class="diamond">◆</span> ONYX</div>
+    <div class="pill"><span class="dot checking" id="api-dot"></span> api :9090</div>
+    <div class="pill"><span class="dot checking" id="searx-dot"></span> searx :8888</div>
+  </div>
+
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <button class="nav-item active" data-panel="run"><span class="label">Run</span><span class="key">1</span></button>
+    <button class="nav-item" data-panel="find"><span class="label">Find</span><span class="key">2</span></button>
+    <button class="nav-item" data-panel="pull"><span class="label">Pull</span><span class="key">3</span></button>
+    <button class="nav-item" data-panel="mine"><span class="label">Mine</span><span class="key">4</span></button>
+  </nav>
+
+  <!-- Main Content -->
+  <div class="main">
+
+    <!-- ═══ RUN Panel ═══ -->
+    <div class="panel active" id="panel-run">
+      <div class="section-label">Research goal</div>
+      <div class="input-row">
+        <input class="input-field" id="agent-goal" type="text" placeholder="e.g. find 3 budget mechanical keyboards and summarize prices" spellcheck="false" autocomplete="off">
+        <input class="input-field" id="agent-steps" type="number" value="15" min="1" max="50" style="width:70px;flex:none" title="Max steps">
+        <button class="btn btn-primary" id="agent-run-btn">Run</button>
+      </div>
+      <div id="agent-trace" class="step-trace"></div>
+      <div id="agent-empty" class="empty-state">
+        <div class="icon">◆</div>
+        <div class="prompt">Type a research goal above and press <strong>Run</strong>. Onyx will search, browse, and extract autonomously — watch each step unfold here.</div>
+      </div>
+    </div>
+
+    <!-- ═══ FIND Panel ═══ -->
+    <div class="panel" id="panel-find">
+      <div class="section-label">Search the web</div>
+      <div class="input-row">
+        <input class="input-field" id="search-query" type="text" placeholder="e.g. best open source LLM frameworks 2025" spellcheck="false" autocomplete="off">
+        <button class="btn btn-primary" id="search-btn">Find</button>
+      </div>
+      <div id="search-results" class="results-list"></div>
+      <div id="search-empty" class="empty-state">
+        <div class="icon">⌕</div>
+        <div class="prompt">Enter a search query above. Results come from your <strong>self-hosted SearXNG</strong> instance — no external APIs, no tracking.</div>
+      </div>
+    </div>
+
+    <!-- ═══ PULL Panel ═══ -->
+    <div class="panel" id="panel-pull">
+      <div class="section-label">Extract structured data</div>
+      <div class="input-row">
+        <input class="input-field" id="extract-url" type="text" placeholder="https://example.com/product-page" spellcheck="false" autocomplete="off">
+        <select class="input-field" id="extract-schema" style="width:160px;flex:none">
+          <option value="product">product</option>
+          <option value="article">article</option>
+          <option value="event">event</option>
+          <option value="search-result-list">search results</option>
+        </select>
+        <button class="btn btn-primary" id="extract-btn">Pull</button>
+      </div>
+      <div id="extract-output" class="extract-output" style="display:none"></div>
+      <div id="extract-empty" class="empty-state">
+        <div class="icon">⧉</div>
+        <div class="prompt">Paste a URL and choose a schema. Onyx will <strong>fetch, render, and extract</strong> structured JSON using the LLM.</div>
+      </div>
+    </div>
+
+    <!-- ═══ MINE Panel ═══ -->
+    <div class="panel" id="panel-mine">
+      <div class="section-label">Search your knowledge base</div>
+      <div class="input-row">
+        <input class="input-field" id="mine-query" type="text" placeholder="Search saved scrapes and extractions..." spellcheck="false" autocomplete="off">
+        <button class="btn btn-primary" id="mine-search-btn">Search</button>
+      </div>
+      <div id="mine-search-results" class="results-list"></div>
+      <div class="section-label" style="margin-top:8px">Agent run history</div>
+      <div id="mine-runs"></div>
+      <div id="mine-empty" class="empty-state">
+        <div class="icon">⛏</div>
+        <div class="prompt">Search your <strong>local knowledge base</strong> of saved pages and extractions. Past agent runs appear below automatically.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="left"><span class="diamond">◆</span> onyx://local</div>
+    <div>v1.0</div>
+  </div>
+</div>
+
+<!-- Run Detail Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:9090';  // always route through Onyx backend proxy (avoids CORS with SearXNG)
+
+// ── Navigation ──
+const navItems = document.querySelectorAll('.nav-item');
+const panels = document.querySelectorAll('.panel');
+function switchPanel(name) {
+  navItems.forEach(n => n.classList.toggle('active', n.dataset.panel === name));
+  panels.forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
+  if (name === 'mine') loadHistory();
+}
+navItems.forEach(n => n.addEventListener('click', () => switchPanel(n.dataset.panel)));
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  const map = {'1':'run','2':'find','3':'pull','4':'mine'};
+  if (map[e.key]) switchPanel(map[e.key]);
+});
+
+// ── Health Checks ──
+async function checkHealth() {
+  const apiDot = document.getElementById('api-dot');
+  const searxDot = document.getElementById('searx-dot');
+  try {
+    const r = await fetch(API + '/health', {signal: AbortSignal.timeout(3000)});
+    apiDot.className = 'dot ' + (r.ok ? 'up' : 'down');
+  } catch { apiDot.className = 'dot down'; }
+  try {
+    const r2 = await fetch(API + '/health/searx', {signal: AbortSignal.timeout(4000)});
+    const sj = await r2.json();
+    searxDot.className = 'dot ' + (sj.status === 'up' ? 'up' : 'down');
+  } catch { searxDot.className = 'dot down'; }
+}
+checkHealth();
+setInterval(checkHealth, 30000);
+
+// ── Agent Run (RUN panel) ──
+const agentGoal = document.getElementById('agent-goal');
+const agentSteps = document.getElementById('agent-steps');
+const agentRunBtn = document.getElementById('agent-run-btn');
+const agentTrace = document.getElementById('agent-trace');
+const agentEmpty = document.getElementById('agent-empty');
+let agentPolling = null;
+
+agentGoal.addEventListener('keydown', e => { if (e.key === 'Enter') agentRunBtn.click(); });
+
+agentRunBtn.addEventListener('click', async () => {
+  const goal = agentGoal.value.trim();
+  if (!goal) return;
+  const maxSteps = parseInt(agentSteps.value) || 15;
+
+  agentRunBtn.disabled = true;
+  agentRunBtn.textContent = 'Running';
+  agentTrace.innerHTML = '';
+  agentEmpty.style.display = 'none';
+
+  try {
+    const resp = await fetch(API + '/agent/async', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({goal, max_steps: maxSteps})
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || 'Agent request failed');
+    }
+    const {run_id} = await resp.json();
+    pollAgentRun(run_id);
+  } catch(e) {
+    agentTrace.innerHTML = `<div class="step-card error"><div class="step-header"><span class="step-num">error</span></div><div class="step-body step-error">${esc(e.message)}</div></div>`;
+    agentRunBtn.disabled = false;
+    agentRunBtn.textContent = 'Run';
+  }
+});
+
+function pollAgentRun(runId) {
+  let lastStepCount = 0;
+  const poll = async () => {
+    try {
+      const resp = await fetch(API + '/agent/runs/' + runId);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const {run, steps} = data;
+
+      // Render new steps
+      if (steps && steps.length > lastStepCount) {
+        const newSteps = steps.slice(lastStepCount);
+        if (lastStepCount === 0) agentTrace.innerHTML = '';
+        for (const step of newSteps) {
+          agentTrace.appendChild(renderStepCard(step, false));
+        }
+        lastStepCount = steps.length;
+        // Scroll latest into view
+        agentTrace.lastElementChild?.scrollIntoView({behavior:'smooth', block:'nearest'});
+      }
+
+      // Check terminal states
+      if (run.status === 'completed' || run.status === 'failed' || run.status === 'max_steps_exceeded') {
+        clearInterval(agentPolling);
+        agentPolling = null;
+
+        // Mark all cards as done
+        agentTrace.querySelectorAll('.step-card.active').forEach(c => c.classList.remove('active'));
+
+        // Show final result banner
+        if (run.result) {
+          const banner = document.createElement('div');
+          banner.className = 'done-banner';
+          banner.innerHTML = `<div class="done-label">◆ Goal achieved</div><div class="done-result">${esc(run.result)}</div>`;
+          agentTrace.appendChild(banner);
+          banner.scrollIntoView({behavior:'smooth', block:'nearest'});
+        } else if (run.status === 'failed') {
+          const banner = document.createElement('div');
+          banner.className = 'done-banner';
+          banner.innerHTML = `<div class="done-label" style="color:#ef4444">✕ Failed</div><div class="done-result">${esc(run.result || 'Agent run failed.')}</div>`;
+          agentTrace.appendChild(banner);
+        }
+
+        agentRunBtn.disabled = false;
+        agentRunBtn.textContent = 'Run';
+      }
+    } catch { /* retry next tick */ }
+  };
+  poll();
+  agentPolling = setInterval(poll, 1500);
+}
+
+function renderStepCard(step, isActive) {
+  const card = document.createElement('div');
+  card.className = 'step-card ' + (isActive ? 'active' : (step.error ? 'error' : 'done'));
+
+  let body = '';
+  try {
+    const args = JSON.parse(step.args_json);
+    // Extract thought from args if present (it's in the LLM response, not always saved separately)
+    if (args.thought) {
+      body += `<div class="step-thought">${esc(args.thought)}</div>`;
+    }
+    const {thought, ...actionArgs} = args;
+    const actionKeys = Object.keys(actionArgs);
+    if (actionKeys.length > 0) {
+      body += `<div class="step-args">${esc(JSON.stringify(actionArgs, null, 2))}</div>`;
+    }
+  } catch {
+    if (step.args_json) body += `<div class="step-args">${esc(step.args_json)}</div>`;
+  }
+
+  if (step.error) {
+    body += `<div class="step-result step-error">✕ ${esc(step.error)}</div>`;
+  } else if (step.result) {
+    const preview = step.result.length > 600 ? step.result.slice(0, 600) + '…' : step.result;
+    body += `<div class="step-result">${esc(preview)}</div>`;
+  }
+
+  card.innerHTML = `
+    <div class="step-header">
+      <span class="step-num">step ${String(step.step_number).padStart(2, '0')}</span>
+      <span class="step-action">${esc(step.action)}</span>
+    </div>
+    <div class="step-body">${body}</div>
+  `;
+  return card;
+}
+
+// ── Search (FIND panel) ──
+const searchQuery = document.getElementById('search-query');
+const searchBtn = document.getElementById('search-btn');
+const searchResults = document.getElementById('search-results');
+const searchEmpty = document.getElementById('search-empty');
+
+searchQuery.addEventListener('keydown', e => { if (e.key === 'Enter') searchBtn.click(); });
+searchBtn.addEventListener('click', async () => {
+  const q = searchQuery.value.trim();
+  if (!q) return;
+  searchBtn.disabled = true;
+  searchBtn.textContent = 'Finding';
+  searchResults.innerHTML = '';
+  searchEmpty.style.display = 'none';
+
+  try {
+    const resp = await fetch(API + '/search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (!data.results || data.results.length === 0) {
+      searchResults.innerHTML = `<div class="empty-state"><div class="prompt">No results found for <strong>${esc(q)}</strong>.</div></div>`;
+    } else {
+      searchResults.innerHTML = data.results.map(r => `
+        <div class="result-item">
+          <div class="result-title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></div>
+          <div class="result-url">${esc(r.url)}</div>
+          <div class="result-snippet">${esc(r.snippet || '')}</div>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    searchResults.innerHTML = `<div class="empty-state"><div class="prompt" style="color:#ef4444">${esc(e.message)}</div></div>`;
+  }
+  searchBtn.disabled = false;
+  searchBtn.textContent = 'Find';
+});
+
+// ── Extract (PULL panel) ──
+const extractUrl = document.getElementById('extract-url');
+const extractSchema = document.getElementById('extract-schema');
+const extractBtn = document.getElementById('extract-btn');
+const extractOutput = document.getElementById('extract-output');
+const extractEmpty = document.getElementById('extract-empty');
+
+extractBtn.addEventListener('click', async () => {
+  const url = extractUrl.value.trim();
+  if (!url) return;
+  const schema = extractSchema.value;
+  extractBtn.disabled = true;
+  extractBtn.textContent = 'Pulling';
+  extractOutput.style.display = 'none';
+  extractEmpty.style.display = 'none';
+
+  try {
+    const resp = await fetch(API + '/extract', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url, schema})
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Extraction failed');
+
+    extractOutput.style.display = 'block';
+    extractOutput.innerHTML = renderExtractedData(data.data);
+  } catch(e) {
+    extractOutput.style.display = 'block';
+    extractOutput.innerHTML = `<div style="color:#ef4444">${esc(e.message)}</div>`;
+  }
+  extractBtn.disabled = false;
+  extractBtn.textContent = 'Pull';
+});
+
+function renderExtractedData(data) {
+  if (!data || typeof data !== 'object') return `<div class="kv-val">${esc(String(data))}</div>`;
+  let html = '';
+  for (const [k, v] of Object.entries(data)) {
+    if (v === null || v === undefined || v === '') continue;
+    if (Array.isArray(v)) {
+      html += `<div class="kv-row"><div class="kv-key">${esc(k)}</div><div class="kv-val array">${v.map(i => `<span>${esc(String(i))}</span>`).join('')}</div></div>`;
+    } else if (typeof v === 'object') {
+      html += `<div class="kv-row"><div class="kv-key">${esc(k)}</div><div class="kv-val">${esc(JSON.stringify(v, null, 2))}</div></div>`;
+    } else {
+      html += `<div class="kv-row"><div class="kv-key">${esc(k)}</div><div class="kv-val">${esc(String(v))}</div></div>`;
+    }
+  }
+  return html;
+}
+
+// ── History (MINE panel) ──
+const mineQuery = document.getElementById('mine-query');
+const mineSearchBtn = document.getElementById('mine-search-btn');
+const mineSearchResults = document.getElementById('mine-search-results');
+const mineRuns = document.getElementById('mine-runs');
+const mineEmpty = document.getElementById('mine-empty');
+
+mineQuery.addEventListener('keydown', e => { if (e.key === 'Enter') mineSearchBtn.click(); });
+mineSearchBtn.addEventListener('click', async () => {
+  const q = mineQuery.value.trim();
+  if (!q) return;
+  mineSearchBtn.disabled = true;
+  mineSearchBtn.textContent = 'Searching';
+  mineSearchResults.innerHTML = '';
+  mineEmpty.style.display = 'none';
+
+  try {
+    const resp = await fetch(API + '/search?q=' + encodeURIComponent(q));
+    const data = await resp.json();
+    if (!data.results || data.results.length === 0) {
+      mineSearchResults.innerHTML = `<div class="empty-state"><div class="prompt">No saved pages match <strong>${esc(q)}</strong>.</div></div>`;
+    } else {
+      mineSearchResults.innerHTML = data.results.map(r => `
+        <div class="result-item">
+          <div class="result-title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></div>
+          <div class="result-url">${esc(r.url)}</div>
+          <div class="result-snippet">${esc(r.snippet || '')}</div>
+        </div>
+      `).join('');
+    }
+  } catch(e) {
+    mineSearchResults.innerHTML = `<div class="empty-state"><div class="prompt" style="color:#ef4444">${esc(e.message)}</div></div>`;
+  }
+  mineSearchBtn.disabled = false;
+  mineSearchBtn.textContent = 'Search';
+});
+
+async function loadHistory() {
+  mineRuns.innerHTML = '';
+  try {
+    const resp = await fetch(API + '/agent/runs');
+    if (!resp.ok) return;
+    const runs = await resp.json();
+    if (!runs || runs.length === 0) {
+      mineEmpty.style.display = 'flex';
+      return;
+    }
+    mineEmpty.style.display = 'none';
+    mineRuns.innerHTML = runs.map(r => {
+      const date = new Date(r.created_at).toLocaleString();
+      return `<div class="history-item" data-run-id="${r.id}">
+        <div class="history-goal">${esc(r.goal)}</div>
+        <div class="history-meta">
+          <span class="history-status ${esc(r.status)}">${esc(r.status)}</span>
+          <span>${date}</span>
+        </div>
+      </div>`;
+    }).join('');
+    mineRuns.querySelectorAll('.history-item').forEach(el => {
+      el.addEventListener('click', () => openRunDetail(el.dataset.runId));
+    });
+  } catch { mineEmpty.style.display = 'flex'; }
+}
+
+// ── Run Detail Modal ──
+const modalOverlay = document.getElementById('modal-overlay');
+const modalContent = document.getElementById('modal-content');
+document.getElementById('modal-close').addEventListener('click', () => modalOverlay.classList.remove('open'));
+modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) modalOverlay.classList.remove('open'); });
+
+async function openRunDetail(runId) {
+  modalOverlay.classList.add('open');
+  modalContent.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+
+  try {
+    const resp = await fetch(API + '/agent/runs/' + runId);
+    const data = await resp.json();
+    const {run, steps} = data;
+
+    let html = `<div class="section-label" style="margin-bottom:4px">Run #${run.id}</div>`;
+    html += `<div style="font-size:14px;color:var(--chalk);margin-bottom:12px">${esc(run.goal)}</div>`;
+    html += `<div style="font-size:11px;color:var(--smoke);margin-bottom:16px">Status: <span class="history-status ${esc(run.status)}">${esc(run.status)}</span> &middot; ${new Date(run.created_at).toLocaleString()}</div>`;
+
+    if (steps && steps.length > 0) {
+      html += '<div class="step-trace">';
+      for (const step of steps) {
+        html += renderStepCardStatic(step);
+      }
+      html += '</div>';
+    }
+
+    if (run.result) {
+      html += `<div class="done-banner" style="margin-top:12px"><div class="done-label">◆ Result</div><div class="done-result">${esc(run.result)}</div></div>`;
+    }
+
+    modalContent.innerHTML = html;
+  } catch(e) {
+    modalContent.innerHTML = `<div style="color:#ef4444">${esc(e.message)}</div>`;
+  }
+}
+
+function renderStepCardStatic(step) {
+  const cls = step.error ? 'error' : 'done';
+  let body = '';
+  try {
+    const args = JSON.parse(step.args_json);
+    if (args.thought) body += `<div class="step-thought">${esc(args.thought)}</div>`;
+    const {thought, ...rest} = args;
+    if (Object.keys(rest).length > 0) body += `<div class="step-args">${esc(JSON.stringify(rest, null, 2))}</div>`;
+  } catch {
+    if (step.args_json) body += `<div class="step-args">${esc(step.args_json)}</div>`;
+  }
+  if (step.error) {
+    body += `<div class="step-result step-error">✕ ${esc(step.error)}</div>`;
+  } else if (step.result) {
+    const preview = step.result.length > 600 ? step.result.slice(0, 600) + '…' : step.result;
+    body += `<div class="step-result">${esc(preview)}</div>`;
+  }
+  return `<div class="step-card ${cls}">
+    <div class="step-header"><span class="step-num">step ${String(step.step_number).padStart(2, '0')}</span><span class="step-action">${esc(step.action)}</span></div>
+    <div class="step-body">${body}</div>
+  </div>`;
+}
+
+// ── Helpers ──
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>

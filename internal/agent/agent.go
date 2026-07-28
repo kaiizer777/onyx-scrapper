@@ -114,12 +114,15 @@ type DoneArgs struct {
 // RunStepCallback allows real-time progress monitoring.
 type StepCallback func(stepNum int, thought string, action string, args string, result string, err error)
 
-// Run executes the multi-step agent loop for a given goal.
-func (a *Agent) Run(ctx context.Context, goal string, cb StepCallback) (*store.AgentRun, error) {
-	// 1. Create run in SQLite
-	runID, err := a.store.CreateAgentRun(goal)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize agent run record: %w", err)
+func (a *Agent) Run(ctx context.Context, goal string, existingRunID int64, cb StepCallback) (*store.AgentRun, error) {
+	// 1. Create run in SQLite if not provided
+	runID := existingRunID
+	var err error
+	if runID == 0 {
+		runID, err = a.store.CreateAgentRun(goal)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize agent run record: %w", err)
+		}
 	}
 
 	// 2. Launch stealth browser session

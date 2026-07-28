@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -74,17 +75,31 @@ func NewServer(opts ...Option) *Server {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ping", s.handlePing)
-	mux.HandleFunc("/health", s.handlePing)
+	mux.HandleFunc("/ping", s.corsMiddleware(s.handlePing))
+	mux.HandleFunc("/health", s.corsMiddleware(s.handlePing))
 	mux.HandleFunc("/search", s.corsMiddleware(s.handleSearch))
 	mux.HandleFunc("/fetch", s.corsMiddleware(s.handleFetch))
 	mux.HandleFunc("/extract", s.corsMiddleware(s.handleExtract))
 	mux.HandleFunc("/agent", s.corsMiddleware(s.handleAgent))
+	mux.HandleFunc("/agent/async", s.corsMiddleware(s.handleAgentAsync))
+	mux.HandleFunc("/agent/runs", s.corsMiddleware(s.handleAgentRuns))
+	mux.HandleFunc("/agent/runs/{id}", s.corsMiddleware(s.handleAgentRunDetail))
 	mux.HandleFunc("/crawl", s.corsMiddleware(s.handleCrawl))
+	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
+
+	// Wrap mux: serve ui.html at root without registering "GET /" in the mux
+	// ("GET /" conflicts with method-less patterns like /health in Go 1.22+ ServeMux)
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" && r.Method == http.MethodGet {
+			s.handleUI(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 
 	s.httpSrv = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.port),
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  60 * time.Second,
 		WriteTimeout: 120 * time.Second,
 		IdleTimeout:  120 * time.Second,
@@ -355,7 +370,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithSearchService(s.searchSvc))
-	run, err := ag.Run(r.Context(), req.Goal, nil)
+	run, err := ag.Run(r.Context(), req.Goal, 0, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("agent execution failed: %v", err))
 		return
@@ -366,6 +381,150 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		Status: run.Status,
 		Result: run.Result,
 	})
+}
+
+func (s *Server) handleAgentAsync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+
+	var req agentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	req.Goal = strings.TrimSpace(req.Goal)
+	if req.Goal == "" {
+		writeError(w, http.StatusBadRequest, "field 'goal' is required")
+		return
+	}
+	if req.MaxSteps <= 0 {
+		req.MaxSteps = 15
+	}
+	if s.client == nil || s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
+		return
+	}
+
+	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithSearchService(s.searchSvc))
+	runID, err := s.store.CreateAgentRun(req.Goal)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create agent run: %v", err))
+		return
+	}
+
+	go func() {
+		_, _ = ag.Run(context.Background(), req.Goal, runID, nil)
+	}()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run_id": runID,
+		"status": "running",
+	})
+}
+
+func (s *Server) handleAgentRuns(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not configured")
+		return
+	}
+	limit := 50
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	runs, err := s.store.GetAgentRuns(limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list runs: %v", err))
+		return
+	}
+	if runs == nil {
+		runs = []store.AgentRun{}
+	}
+	writeJSON(w, http.StatusOK, runs)
+}
+
+type agentRunDetail struct {
+	Run   store.AgentRun    `json:"run"`
+	Steps []store.AgentStep `json:"steps"`
+}
+
+func (s *Server) handleAgentRunDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not configured")
+		return
+	}
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+	runID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid run id")
+		return
+	}
+	run, err := s.store.GetAgentRun(runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get run: %v", err))
+		return
+	}
+	if run == nil {
+		writeError(w, http.StatusNotFound, "run not found")
+		return
+	}
+	steps, err := s.store.GetAgentSteps(runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get steps: %v", err))
+		return
+	}
+	if steps == nil {
+		steps = []store.AgentStep{}
+	}
+	writeJSON(w, http.StatusOK, agentRunDetail{
+		Run:   *run,
+		Steps: steps,
+	})
+}
+
+func (s *Server) handleSearxHealth(w http.ResponseWriter, r *http.Request) {
+	searxURL := "http://localhost:8888/search?q=test&format=json"
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(searxURL)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"status": "down", "error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "up", "code": resp.StatusCode})
+}
+
+func (s *Server) handleUI(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	uiPath := "ui.html"
+	if _, err := os.Stat(uiPath); os.IsNotExist(err) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, "ui.html not found in project root")
+		return
+	}
+	http.ServeFile(w, r, uiPath)
 }
 
 type crawlRequest struct {

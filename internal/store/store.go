@@ -295,3 +295,35 @@ func (s *Store) GetAgentSteps(runID int64) ([]AgentStep, error) {
 	return steps, nil
 }
 
+// GetAgentRuns retrieves all agent runs ordered by most recent first.
+// Does not include result or steps — use GetAgentRun and GetAgentSteps for detail.
+func (s *Store) GetAgentRuns(limit int) ([]AgentRun, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := `
+		SELECT id, goal, status, result, created_at, updated_at
+		FROM agent_runs
+		ORDER BY id DESC
+		LIMIT ?;
+	`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query agent runs: %w", err)
+	}
+	defer rows.Close()
+
+	var runs []AgentRun
+	for rows.Next() {
+		var r AgentRun
+		if err := rows.Scan(&r.ID, &r.Goal, &r.Status, &r.Result, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan agent run: %w", err)
+		}
+		runs = append(runs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating agent runs: %w", err)
+	}
+	return runs, nil
+}
+
