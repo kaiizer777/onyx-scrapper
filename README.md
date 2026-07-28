@@ -1,7 +1,7 @@
 # Onyx Scrapper
 
-> **Personal AI Web Agent, Structured Scraper & Autonomous Search Engine**  
-> *Built with Go, go-rod/stealth, Colly, SQLite (FTS5), and MiMo V2.5 LLM.*
+> **A self-hosted, fully free AI web agent that searches, browses, and extracts structured data autonomously — no subscriptions, no API markup, no limits.**  
+> *Go · go-rod/stealth · Colly · SQLite (FTS5) · SearXNG · MiMo V2.5 — $0/month, forever.*
 
 ---
 
