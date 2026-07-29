@@ -16,9 +16,9 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/extract"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/research"
-	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	"github.com/kaiizer777/onyx-scrapper/internal/webui"
+	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 )
 
 // Server represents the Onyx Scrapper local HTTP API server.
@@ -26,7 +26,7 @@ type Server struct {
 	port      int
 	client    *llm.Client
 	store     *store.Store
-	searchSvc *search.Service
+	registry  *discovery.Registry
 	httpSrv   *http.Server
 }
 
@@ -56,10 +56,10 @@ func WithStore(st *store.Store) Option {
 	}
 }
 
-// WithSearchService sets the search service instance.
-func WithSearchService(svc *search.Service) Option {
+// WithRegistry sets the registry instance.
+func WithRegistry(registry *discovery.Registry) Option {
 	return func(s *Server) {
-		s.searchSvc = svc
+		s.registry = registry
 	}
 }
 
@@ -72,9 +72,7 @@ func NewServer(opts ...Option) *Server {
 		opt(s)
 	}
 
-	if s.searchSvc == nil {
-		s.searchSvc = search.NewService(s.store)
-	}
+	// We no longer initialize a default search service here, caller must provide registry.
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ping", s.corsMiddleware(s.handlePing))
@@ -91,7 +89,7 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("/deep-research/{id}", s.corsMiddleware(s.handleDeepResearchDetail))
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
 
-	uiHandler, err := webui.NewUIHandler(s.store, s.client, s.searchSvc)
+	uiHandler, err := webui.NewUIHandler(s.store, s.client, s.registry)
 	if err == nil {
 		uiHandler.RegisterRoutes(mux)
 	} else {
@@ -201,13 +199,12 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queryStr = strings.TrimSpace(queryStr)
-	res, err := s.searchSvc.Search(r.Context(), queryStr)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("search failed: %v", err))
-		return
-	}
+	res := s.registry.Search(r.Context(), queryStr)
 
-	writeJSON(w, http.StatusOK, res)
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"query":   queryStr,
+		"results": res,
+	})
 }
 
 type fetchRequest struct {
@@ -263,7 +260,7 @@ func (s *Server) handleFetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.store != nil {
-		if _, saveErr := s.store.SavePage(targetURL, rawHTML, cleanText); saveErr != nil {
+		if _, saveErr := s.store.SavePage(targetURL, rawHTML, cleanText, "api"); saveErr != nil {
 			slog.Warn("Failed to save fetched page to store", "url", targetURL, "error", saveErr)
 		}
 	}
@@ -329,7 +326,7 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) {
 
 	if s.store != nil {
 		cleanText, _ := extract.CleanHTML(rawHTML)
-		if pageID, saveErr := s.store.SavePage(req.URL, rawHTML, cleanText); saveErr == nil {
+		if pageID, saveErr := s.store.SavePage(req.URL, rawHTML, cleanText, "api"); saveErr == nil {
 			_, _ = s.store.SaveExtraction(pageID, req.Schema, string(rawJSON))
 		}
 	}
@@ -380,7 +377,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithSearchService(s.searchSvc))
+	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithRegistry(s.registry))
 	run, err := ag.Run(r.Context(), req.Goal, 0, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("agent execution failed: %v", err))
@@ -419,7 +416,7 @@ func (s *Server) handleAgentAsync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithSearchService(s.searchSvc))
+	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithRegistry(s.registry))
 	runID, err := s.store.CreateAgentRun(req.Goal)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create agent run: %v", err))
@@ -653,7 +650,7 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orchestrator := research.NewOrchestrator(s.client, s.store, s.searchSvc)
+	orchestrator := research.NewOrchestrator(s.client, s.store, s.registry)
 	
 	// Create run ID
 	runID, err := s.store.CreateResearchRun(req.Query)

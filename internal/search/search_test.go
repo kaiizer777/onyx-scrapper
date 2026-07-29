@@ -83,7 +83,7 @@ func TestSearchFallbackToStore(t *testing.T) {
 	defer st.Close()
 	defer os.Remove(dbPath)
 
-	_, err = st.SavePage("https://example.com/go-article", "<html><body>Go scraping is fast and efficient.</body></html>", "Go scraping is fast and efficient.")
+	_, err = st.SavePage("https://example.com/go-article", "<html><body>Go scraping is fast and efficient.</body></html>", "Go scraping is fast and efficient.", "test")
 	if err != nil {
 		t.Fatalf("failed to save page: %v", err)
 	}

@@ -13,9 +13,27 @@ type OpenCodeZenConfig struct {
 	DefaultModel string `yaml:"default_model"`
 }
 
+type TinyFishConfig struct {
+	Enabled *bool  `yaml:"enabled"`
+	APIKey  string `yaml:"api_key"`
+}
+
+type JinaConfig struct {
+	Enabled         *bool  `yaml:"enabled"`
+	APIKey          string `yaml:"api_key"`
+	RerankerEnabled *bool  `yaml:"reranker_enabled"`
+}
+
+type DiscoveryConfig struct {
+	FetchPriority []string `yaml:"fetch_priority"`
+}
+
 type Config struct {
 	OpenCodeZen   OpenCodeZenConfig `yaml:"opencode_zen"`
 	ScraperAPIKey string            `yaml:"scraperapi_key"`
+	TinyFish      *TinyFishConfig   `yaml:"tinyfish,omitempty"`
+	Jina          *JinaConfig       `yaml:"jina,omitempty"`
+	Discovery     *DiscoveryConfig  `yaml:"discovery,omitempty"`
 }
 
 // GetScraperAPIKey returns the ScraperAPI key from env var SCRAPERAPI_KEY or config file.

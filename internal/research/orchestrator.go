@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
-	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
 )
 
 type Options struct {
@@ -21,19 +21,19 @@ type Options struct {
 type Orchestrator struct {
 	client      *llm.Client
 	store       *store.Store
-	searchSvc   *search.Service
+	registry    *discoverypkg.Registry
 	planner     *Planner
 	worker      *Worker
 	synthesizer *Synthesizer
 }
 
-func NewOrchestrator(client *llm.Client, st *store.Store, searchSvc *search.Service) *Orchestrator {
+func NewOrchestrator(client *llm.Client, st *store.Store, registry *discoverypkg.Registry) *Orchestrator {
 	return &Orchestrator{
 		client:      client,
 		store:       st,
-		searchSvc:   searchSvc,
+		registry:    registry,
 		planner:     NewPlanner(client),
-		worker:      NewWorker(client, st, searchSvc),
+		worker:      NewWorker(client, st, registry),
 		synthesizer: NewSynthesizer(client),
 	}
 }

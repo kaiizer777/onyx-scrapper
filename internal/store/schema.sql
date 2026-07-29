@@ -3,7 +3,8 @@ CREATE TABLE IF NOT EXISTS pages (
     url TEXT UNIQUE,
     fetched_at DATETIME,
     raw_html TEXT,
-    clean_text TEXT
+    clean_text TEXT,
+    source_provider TEXT
 );
 
 CREATE TABLE IF NOT EXISTS extractions (
@@ -79,6 +80,7 @@ CREATE TABLE IF NOT EXISTS findings (
     subquestion_id INTEGER,
     claim TEXT,
     source_url TEXT,
+    source_provider TEXT,
     confidence REAL,
     created_at DATETIME,
     FOREIGN KEY(subquestion_id) REFERENCES research_subquestions(id) ON DELETE CASCADE

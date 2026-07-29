@@ -119,8 +119,7 @@ func (s *Scheduler) RunJob(ctx context.Context, job JobConfig) error {
 
 	var pageID int64
 	if s.store != nil {
-		pid, err := s.store.SavePage(job.URL, rawHTML, cleanText)
-		if err != nil {
+		if pid, err := s.store.SavePage(job.URL, rawHTML, cleanText, "scheduler"); err != nil {
 			s.logger.Warn("Failed to save page to database during scheduled run", "job", job.Name, "url", job.URL, "error", err)
 		} else {
 			pageID = pid

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/search"
 )
 
@@ -53,8 +54,10 @@ func TestServerSearchGETAndPOST(t *testing.T) {
 	}))
 	defer mockSearXNG.Close()
 
-	searchSvc := search.NewService(nil, search.WithSearXNGURL(mockSearXNG.URL))
-	srv := NewServer(WithSearchService(searchSvc))
+	mockSearXNGClient := search.NewSearXNGClient(mockSearXNG.URL, http.DefaultClient)
+	provider := discovery.NewSearXNGProvider(mockSearXNGClient)
+	registry := discovery.NewRegistry([]discovery.SearchProvider{provider}, nil, nil, nil)
+	srv := NewServer(WithRegistry(registry))
 	ts := httptest.NewServer(srv.httpSrv.Handler)
 	defer ts.Close()
 

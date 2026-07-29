@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/agent"
+	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/research"
-	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -28,13 +28,13 @@ var templatesFS embed.FS
 type UIHandler struct {
 	store     *store.Store
 	client    *llm.Client
-	searchSvc *search.Service
-	tmpl      *template.Template
+	registry  *discovery.Registry
+	templates *template.Template
 	md        goldmark.Markdown
 }
 
 // NewUIHandler creates a new handler for the web UI.
-func NewUIHandler(st *store.Store, client *llm.Client, searchSvc *search.Service) (*UIHandler, error) {
+func NewUIHandler(store *store.Store, client *llm.Client, registry *discovery.Registry) (*UIHandler, error) {
 	// Parse templates
 	tmpl, err := template.ParseFS(templatesFS, "templates/*.html")
 	if err != nil {
@@ -48,10 +48,10 @@ func NewUIHandler(st *store.Store, client *llm.Client, searchSvc *search.Service
 	)
 
 	return &UIHandler{
-		store:     st,
+		store:     store,
 		client:    client,
-		searchSvc: searchSvc,
-		tmpl:      tmpl,
+		registry:  registry,
+		templates: tmpl,
 		md:        md,
 	}, nil
 }
@@ -79,7 +79,7 @@ func (h *UIHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *UIHandler) renderTemplate(w http.ResponseWriter, name string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	err := h.tmpl.ExecuteTemplate(w, name, data)
+	err := h.templates.ExecuteTemplate(w, name, data)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Template rendering error: %v", err), http.StatusInternalServerError)
 	}
@@ -88,7 +88,7 @@ func (h *UIHandler) renderTemplate(w http.ResponseWriter, name string, data inte
 func (h *UIHandler) renderPartial(w http.ResponseWriter, name string, data interface{}) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// If the template needs the base layout, but we only want to render a specific block or partial:
-	err := h.tmpl.ExecuteTemplate(w, name, data)
+	err := h.templates.ExecuteTemplate(w, name, data)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Partial rendering error: %v", err), http.StatusInternalServerError)
 	}
@@ -174,18 +174,14 @@ func (h *UIHandler) handleAgentLaunch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	maxSteps, _ := strconv.Atoi(r.FormValue("max_steps"))
-	if maxSteps <= 0 {
-		maxSteps = 15
-	}
-	
 	runID, err := h.store.CreateAgentRun(goal)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to create run: %v", err), http.StatusInternalServerError)
 		return
 	}
 	
-	ag := agent.NewAgent(h.client, h.store, agent.WithMaxSteps(maxSteps), agent.WithSearchService(h.searchSvc))
+	maxSteps := 15
+	ag := agent.NewAgent(h.client, h.store, agent.WithMaxSteps(maxSteps), agent.WithRegistry(h.registry))
 	
 	go func() {
 		_, _ = ag.Run(context.Background(), goal, runID, nil)
@@ -259,16 +255,16 @@ func (h *UIHandler) handleResearchLaunch(w http.ResponseWriter, r *http.Request)
 	
 	maxQuestions, _ := strconv.Atoi(r.FormValue("max_questions"))
 	if maxQuestions <= 0 {
-		maxQuestions = 6
+		maxQuestions = 5
 	}
-	
-	orchestrator := research.NewOrchestrator(h.client, h.store, h.searchSvc)
 	
 	runID, err := h.store.CreateResearchRun(query)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to create run: %v", err), http.StatusInternalServerError)
 		return
 	}
+	
+	orchestrator := research.NewOrchestrator(h.client, h.store, h.registry)
 	
 	opts := research.Options{
 		MaxSubQuestions: maxQuestions,

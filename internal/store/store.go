@@ -19,8 +19,9 @@ type Page struct {
 	ID        int64     `json:"id"`
 	URL       string    `json:"url"`
 	FetchedAt time.Time `json:"fetched_at"`
-	RawHTML   string    `json:"raw_html"`
-	CleanText string    `json:"clean_text"`
+	RawHTML        string    `json:"raw_html"`
+	CleanText      string    `json:"clean_text"`
+	SourceProvider string    `json:"source_provider"`
 }
 
 type Extraction struct {
@@ -83,11 +84,12 @@ type ResearchSubQuestion struct {
 
 type Finding struct {
 	ID            int64     `json:"id"`
-	SubQuestionID int64     `json:"subquestion_id"`
-	Claim         string    `json:"claim"`
-	SourceURL     string    `json:"source_url"`
-	Confidence    float64   `json:"confidence"`
-	CreatedAt     time.Time `json:"created_at"`
+	SubQuestionID  int64     `json:"subquestion_id"`
+	Claim          string    `json:"claim"`
+	SourceURL      string    `json:"source_url"`
+	SourceProvider string    `json:"source_provider"`
+	Confidence     float64   `json:"confidence"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 type Store struct {
@@ -135,24 +137,25 @@ func (s *Store) Close() error {
 }
 
 // SavePage inserts or updates a page record by URL and returns its database ID.
-func (s *Store) SavePage(url, rawHTML, cleanText string) (int64, error) {
+func (s *Store) SavePage(url, rawHTML, cleanText, sourceProvider string) (int64, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
 	now := time.Now().UTC()
 
 	query := `
-		INSERT INTO pages (url, fetched_at, raw_html, clean_text)
-		VALUES (?, ?, ?, ?)
+		INSERT INTO pages (url, fetched_at, raw_html, clean_text, source_provider)
+		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			fetched_at = excluded.fetched_at,
 			raw_html = excluded.raw_html,
-			clean_text = excluded.clean_text
+			clean_text = excluded.clean_text,
+			source_provider = excluded.source_provider
 		RETURNING id;
 	`
 
 	var pageID int64
-	err := s.db.QueryRow(query, url, now, rawHTML, cleanText).Scan(&pageID)
+	err := s.db.QueryRow(query, url, now, rawHTML, cleanText, sourceProvider).Scan(&pageID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to save page (%s): %w", url, err)
 	}
@@ -162,11 +165,11 @@ func (s *Store) SavePage(url, rawHTML, cleanText string) (int64, error) {
 
 // GetPageByURL retrieves a saved page by its exact URL.
 func (s *Store) GetPageByURL(url string) (*Page, error) {
-	query := `SELECT id, url, fetched_at, raw_html, clean_text FROM pages WHERE url = ?`
+	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider FROM pages WHERE url = ?`
 	row := s.db.QueryRow(query, url)
 
 	var p Page
-	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText)
+	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -179,11 +182,11 @@ func (s *Store) GetPageByURL(url string) (*Page, error) {
 
 // GetPageByID retrieves a saved page by its database ID.
 func (s *Store) GetPageByID(id int64) (*Page, error) {
-	query := `SELECT id, url, fetched_at, raw_html, clean_text FROM pages WHERE id = ?`
+	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider FROM pages WHERE id = ?`
 	row := s.db.QueryRow(query, id)
 
 	var p Page
-	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText)
+	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -197,7 +200,7 @@ func (s *Store) GetPageByID(id int64) (*Page, error) {
 // GetRecentPages retrieves recent scraped pages.
 func (s *Store) GetRecentPages(limit, offset int) ([]Page, error) {
 	query := `
-		SELECT id, url, fetched_at, raw_html, clean_text 
+		SELECT id, url, fetched_at, raw_html, clean_text, source_provider 
 		FROM pages 
 		ORDER BY fetched_at DESC 
 		LIMIT ? OFFSET ?
@@ -211,7 +214,7 @@ func (s *Store) GetRecentPages(limit, offset int) ([]Page, error) {
 	var pages []Page
 	for rows.Next() {
 		var p Page
-		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText); err != nil {
+		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider); err != nil {
 			return nil, fmt.Errorf("failed to scan page: %w", err)
 		}
 		pages = append(pages, p)
@@ -538,11 +541,11 @@ func (s *Store) GetSubQuestionsForRun(runID int64) ([]ResearchSubQuestion, error
 	return sqs, nil
 }
 
-func (s *Store) SaveFinding(sqID int64, claim, sourceURL string, confidence float64) (int64, error) {
+func (s *Store) SaveFinding(sqID int64, claim, sourceURL, sourceProvider string, confidence float64) (int64, error) {
 	now := time.Now().UTC()
-	query := `INSERT INTO findings (subquestion_id, claim, source_url, confidence, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id;`
+	query := `INSERT INTO findings (subquestion_id, claim, source_url, source_provider, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id;`
 	var fID int64
-	err := s.db.QueryRow(query, sqID, claim, sourceURL, confidence, now).Scan(&fID)
+	err := s.db.QueryRow(query, sqID, claim, sourceURL, sourceProvider, confidence, now).Scan(&fID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to save finding: %w", err)
 	}
@@ -550,7 +553,7 @@ func (s *Store) SaveFinding(sqID int64, claim, sourceURL string, confidence floa
 }
 
 func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
-	query := `SELECT id, subquestion_id, claim, source_url, confidence, created_at FROM findings WHERE subquestion_id = ? ORDER BY id ASC`
+	query := `SELECT id, subquestion_id, claim, source_url, source_provider, confidence, created_at FROM findings WHERE subquestion_id = ? ORDER BY id ASC`
 	rows, err := s.db.Query(query, sqID)
 	if err != nil {
 		return nil, err
@@ -559,7 +562,7 @@ func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
 	var fs []Finding
 	for rows.Next() {
 		var f Finding
-		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.Confidence, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &f.CreatedAt); err != nil {
 			return nil, err
 		}
 		fs = append(fs, f)
@@ -569,7 +572,7 @@ func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
 
 func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
 	query := `
-		SELECT f.id, f.subquestion_id, f.claim, f.source_url, f.confidence, f.created_at 
+		SELECT f.id, f.subquestion_id, f.claim, f.source_url, f.source_provider, f.confidence, f.created_at 
 		FROM findings f
 		JOIN research_subquestions sq ON f.subquestion_id = sq.id
 		WHERE sq.run_id = ?
@@ -583,7 +586,7 @@ func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
 	var fs []Finding
 	for rows.Next() {
 		var f Finding
-		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.Confidence, &f.CreatedAt); err != nil {
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &f.CreatedAt); err != nil {
 			return nil, err
 		}
 		fs = append(fs, f)

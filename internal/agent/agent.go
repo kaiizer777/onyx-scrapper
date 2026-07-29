@@ -18,7 +18,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
-	searchpkg "github.com/kaiizer777/onyx-scrapper/internal/search"
+	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 type Agent struct {
 	client        *llm.Client
 	store         *store.Store
-	searchSvc     *searchpkg.Service
+	registry      *discoverypkg.Registry
 	maxSteps      int
 	subQuestionID int64
 }
@@ -54,10 +54,10 @@ func WithSubQuestionID(id int64) Option {
 	}
 }
 
-// WithSearchService sets custom search service for agent execution.
-func WithSearchService(svc *searchpkg.Service) Option {
+// WithRegistry sets custom registry for agent execution.
+func WithRegistry(registry *discoverypkg.Registry) Option {
 	return func(a *Agent) {
-		a.searchSvc = svc
+		a.registry = registry
 	}
 }
 
@@ -71,9 +71,7 @@ func NewAgent(client *llm.Client, st *store.Store, opts ...Option) *Agent {
 	for _, opt := range opts {
 		opt(a)
 	}
-	if a.searchSvc == nil {
-		a.searchSvc = searchpkg.NewService(st)
-	}
+	// We no longer instantiate a default search service here; the caller must provide a Registry.
 	return a
 }
 
@@ -318,7 +316,7 @@ Rules:
 			} else if a.subQuestionID == 0 {
 				stepErr = fmt.Errorf("record_finding is not available outside of deep research mode")
 			} else {
-				_, stepErr = a.store.SaveFinding(a.subQuestionID, args.Claim, args.SourceURL, args.Confidence)
+				_, stepErr = a.store.SaveFinding(a.subQuestionID, args.Claim, args.SourceURL, "agent", args.Confidence)
 				if stepErr == nil {
 					stepResult = fmt.Sprintf("Successfully recorded finding: %q", args.Claim)
 				}
@@ -404,7 +402,7 @@ func (a *Agent) execNavigate(ctx context.Context, page *rod.Page, targetURL stri
 	}
 
 	// Persist page in database
-	if pageID, err := a.store.SavePage(targetURL, rawHTML, cleanText); err != nil {
+	if pageID, err := a.store.SavePage(targetURL, rawHTML, cleanText, "rod"); err != nil {
 		slog.Warn("Failed to save page to store", "url", targetURL, "error", err)
 	} else {
 		slog.Debug("Saved page to store", "url", targetURL, "page_id", pageID)
@@ -555,23 +553,20 @@ func (a *Agent) execExtract(ctx context.Context, page *rod.Page, schema string) 
 }
 
 func (a *Agent) execWebSearch(ctx context.Context, query string) (string, error) {
-	if a.searchSvc == nil {
-		return "", fmt.Errorf("search service not configured")
+	if a.registry == nil {
+		return "", fmt.Errorf("registry not configured")
 	}
 
-	res, err := a.searchSvc.Search(ctx, query)
-	if err != nil {
-		return "", fmt.Errorf("web_search failed: %w", err)
-	}
+	results := a.registry.Search(ctx, query)
 
-	if len(res.Results) == 0 {
+	if len(results) == 0 {
 		return fmt.Sprintf("No web search results found for query %q.", query), nil
 	}
 
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Web Search Results for query %q:\n", query))
-	for i, item := range res.Results {
-		sb.WriteString(fmt.Sprintf("%d. Title: %s\n   URL: %s\n   Snippet: %s\n\n", i+1, item.Title, item.URL, item.Snippet))
+	for i, item := range results {
+		sb.WriteString(fmt.Sprintf("%d. Title: %s\n   URL: %s\n   Snippet: %s\n   Provider: %s\n\n", i+1, item.Title, item.URL, item.Snippet, item.Provider))
 		if i >= 7 {
 			break
 		}

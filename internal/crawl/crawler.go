@@ -287,7 +287,7 @@ func (c *Crawler) processCrawlItem(ctx context.Context, item *QueueItem, opts Cr
 
 	saved := false
 	if opts.Store != nil {
-		pageID, saveErr := opts.Store.SavePage(item.URL, rawHTML, cleanText)
+		pageID, saveErr := opts.Store.SavePage(item.URL, rawHTML, cleanText, "crawler")
 		if saveErr != nil {
 			slog.Warn("Failed to save crawled page to DB", "url", item.URL, "error", saveErr)
 		} else {
