@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -221,8 +222,13 @@ Rules:
 
 		if err != nil {
 			errStr := fmt.Errorf("LLM chat error at step %d: %w", stepNum, err).Error()
+			status := "failed"
+			if errors.Is(err, context.Canceled) {
+				status = "cancelled"
+				errStr = "Run cancelled by user"
+			}
 			_, _ = a.store.SaveAgentStep(runID, stepNum, "llm_call", "", "", errStr)
-			_ = a.store.UpdateAgentRunStatus(runID, "failed", errStr)
+			_ = a.store.UpdateAgentRunStatus(runID, status, errStr)
 			if cb != nil {
 				cb(stepNum, "", "error", "", "", err)
 			}

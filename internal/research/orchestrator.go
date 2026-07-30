@@ -2,6 +2,7 @@ package research
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -79,7 +80,11 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 		slog.Info("Planning research", "goal", goal)
 		plan, err = o.planner.Plan(ctx, goal)
 		if err != nil {
-			_ = o.store.UpdateResearchRunStatus(runID, "failed", "")
+			status := "failed"
+			if errors.Is(err, context.Canceled) {
+				status = "cancelled"
+			}
+			_ = o.store.UpdateResearchRunStatus(runID, status, "")
 			return nil, fmt.Errorf("planning failed: %w", err)
 		}
 
@@ -98,6 +103,11 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 	totalQuestionsGenerated := len(plan.SubQuestions)
 
 	for {
+		if ctx.Err() != nil {
+			_ = o.store.UpdateResearchRunStatus(runID, "cancelled", "")
+			return nil, ctx.Err()
+		}
+
 		dbSqs, _ := o.store.GetSubQuestionsForRun(runID)
 		var pendingSqs []store.ResearchSubQuestion
 		for _, sq := range dbSqs {
@@ -153,7 +163,11 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 
 	report, err := o.synthesizer.Synthesize(ctx, plan, allFindings)
 	if err != nil {
-		_ = o.store.UpdateResearchRunStatus(runID, "failed", "")
+		status := "failed"
+		if errors.Is(err, context.Canceled) {
+			status = "cancelled"
+		}
+		_ = o.store.UpdateResearchRunStatus(runID, status, "")
 		return nil, fmt.Errorf("synthesis failed: %w", err)
 	}
 

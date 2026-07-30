@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/agent"
@@ -28,6 +29,9 @@ type Server struct {
 	store     *store.Store
 	registry  *discovery.Registry
 	httpSrv   *http.Server
+
+	activeRunsMu sync.Mutex
+	activeRuns   map[string]context.CancelFunc
 }
 
 // Option configures Server options.
@@ -66,7 +70,8 @@ func WithRegistry(registry *discovery.Registry) Option {
 // NewServer constructs a new HTTP API server.
 func NewServer(opts ...Option) *Server {
 	s := &Server{
-		port: 9090,
+		port:       9090,
+		activeRuns: make(map[string]context.CancelFunc),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -87,6 +92,8 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("/crawl", s.corsMiddleware(s.handleCrawl))
 	mux.HandleFunc("/deep-research", s.corsMiddleware(s.handleDeepResearch))
 	mux.HandleFunc("/deep-research/{id}", s.corsMiddleware(s.handleDeepResearchDetail))
+	mux.HandleFunc("POST /agent/runs/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
+	mux.HandleFunc("POST /deep-research/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
 
 	uiHandler, err := webui.NewUIHandler(s.store, s.client, s.registry)
@@ -423,8 +430,19 @@ func (s *Server) handleAgentAsync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	runKey := fmt.Sprintf("agent_%d", runID)
+	s.activeRunsMu.Lock()
+	s.activeRuns[runKey] = cancel
+	s.activeRunsMu.Unlock()
+
 	go func() {
-		_, _ = ag.Run(context.Background(), req.Goal, runID, nil)
+		defer func() {
+			s.activeRunsMu.Lock()
+			delete(s.activeRuns, runKey)
+			s.activeRunsMu.Unlock()
+		}()
+		_, _ = ag.Run(ctx, req.Goal, runID, nil)
 	}()
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -664,8 +682,19 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 		ResumeRunID:     runID,
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	runKey := fmt.Sprintf("research_%d", runID)
+	s.activeRunsMu.Lock()
+	s.activeRuns[runKey] = cancel
+	s.activeRunsMu.Unlock()
+
 	go func() {
-		_, _ = orchestrator.Run(context.Background(), req.Query, opts)
+		defer func() {
+			s.activeRunsMu.Lock()
+			delete(s.activeRuns, runKey)
+			s.activeRunsMu.Unlock()
+		}()
+		_, _ = orchestrator.Run(ctx, req.Query, opts)
 	}()
 
 	w.WriteHeader(http.StatusAccepted) // 202
@@ -723,5 +752,51 @@ func (s *Server) handleDeepResearchDetail(w http.ResponseWriter, r *http.Request
 		"sub_questions": sqs,
 		"findings":      findings,
 	})
+}
+
+func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	
+	runType := ""
+	if strings.HasPrefix(r.URL.Path, "/agent/") {
+		runType = "agent"
+	} else if strings.HasPrefix(r.URL.Path, "/deep-research/") {
+		runType = "research"
+	} else {
+		writeError(w, http.StatusBadRequest, "unknown run type")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+
+	runID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid run id")
+		return
+	}
+
+	runKey := fmt.Sprintf("%s_%d", runType, runID)
+	s.activeRunsMu.Lock()
+	cancel, exists := s.activeRuns[runKey]
+	if exists {
+		cancel()
+		delete(s.activeRuns, runKey)
+	}
+	s.activeRunsMu.Unlock()
+
+	if runType == "agent" {
+		_ = s.store.UpdateAgentRunStatus(runID, "cancelled", "Run cancelled by user")
+	} else {
+		_ = s.store.UpdateResearchRunStatus(runID, "cancelled", "Run cancelled by user")
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
