@@ -11,21 +11,29 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
-    --bg-base: #0f1115;
-    --bg-surface: #181b21;
-    --bg-surface-hover: #21252d;
-    --border-subtle: #2a2e37;
-    --text-primary: #e2e8f0;
-    --text-secondary: #94a3b8;
+    --bg-base: #09090b;
+    --bg-surface: #121214;
+    --bg-surface-hover: #1f1f22;
+    --border-subtle: #27272a;
+    --border-lighter: #3f3f46;
+    --text-primary: #f8fafc;
+    --text-secondary: #a1a1aa;
     --brand-primary: #818cf8;
+    --brand-tint: rgba(129, 140, 248, 0.1);
     --brand-gradient: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
     
-    --status-run: #f59e0b;
-    --status-done: #10b981;
-    --status-err: #ef4444;
+    --status-run: #fbbf24;
+    --status-run-bg: rgba(251, 191, 36, 0.15);
+    --status-done: #34d399;
+    --status-done-bg: rgba(52, 211, 153, 0.15);
+    --status-err: #f87171;
+    --status-err-bg: rgba(248, 113, 113, 0.15);
 
-    --font-sans: 'Inter', system-ui, sans-serif;
-    --font-mono: 'Fira Code', monospace;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.5);
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Consolas, monospace;
     --sidebar-w: 280px;
   }
 
@@ -40,6 +48,7 @@
     height: 100vh;
     display: flex;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
   /* Scrollbar */
@@ -75,17 +84,21 @@
   }
 
   .btn-new {
-    background: rgba(129, 140, 248, 0.1);
-    color: var(--brand-primary);
-    border: 1px solid rgba(129, 140, 248, 0.3);
+    background: var(--brand-primary);
+    color: #fff;
+    border: none;
     border-radius: 6px;
     padding: 6px 12px;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   }
-  .btn-new:hover { background: rgba(129, 140, 248, 0.2); }
+  .btn-new:hover { 
+    background: #6366f1; 
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  }
 
   .history-list {
     flex: 1;
@@ -93,53 +106,53 @@
     padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
   }
 
   .history-item {
-    padding: 12px;
+    padding: 10px 12px;
     border-radius: 8px;
     cursor: pointer;
     border: 1px solid transparent;
     transition: all 0.2s ease;
     background: transparent;
   }
-  .history-item:hover { background: rgba(255, 255, 255, 0.02); }
+  .history-item:hover { background: var(--bg-surface-hover); }
   .history-item.active {
-    background: var(--bg-surface-hover);
-    border-color: var(--border-subtle);
+    background: var(--brand-tint);
+    border-color: rgba(129, 140, 248, 0.3);
   }
 
   .h-goal {
     font-size: 13px;
     font-weight: 500;
-    margin-bottom: 6px;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
   }
 
   .h-meta {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-size: 11px;
     color: var(--text-secondary);
-    text-transform: uppercase;
     font-family: var(--font-mono);
   }
   
   .badge {
-    padding: 2px 6px;
-    border-radius: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
     font-weight: 600;
     font-size: 10px;
-    background: var(--bg-base);
+    text-transform: uppercase;
   }
-  .badge.running { color: var(--status-run); }
-  .badge.completed, .badge.done { color: var(--status-done); }
-  .badge.failed, .badge.error { color: var(--status-err); }
+  .badge.running { color: var(--status-run); background: var(--status-run-bg); }
+  .badge.completed, .badge.done { color: var(--status-done); background: var(--status-done-bg); }
+  .badge.failed, .badge.error { color: var(--status-err); background: var(--status-err-bg); }
 
   /* ── Main Panel ── */
   .main {
@@ -148,7 +161,6 @@
     flex-direction: column;
     position: relative;
     background: var(--bg-base);
-    background-image: radial-gradient(circle at top center, rgba(129, 140, 248, 0.05), transparent 40%);
   }
 
   /* Chat Thread */
@@ -158,12 +170,13 @@
     padding: 40px;
     display: flex;
     flex-direction: column;
-    align-items: center; /* Center content horizontally */
+    align-items: center;
+    scroll-behavior: smooth;
   }
 
   .thread-content {
     width: 100%;
-    max-width: 800px; /* Keep chat centered and constrained */
+    max-width: 800px;
     display: flex;
     flex-direction: column;
     gap: 24px;
@@ -173,13 +186,15 @@
   /* User Bubble */
   .user-bubble {
     align-self: flex-end;
-    background: var(--bg-surface-hover);
-    padding: 12px 18px;
-    border-radius: 18px 18px 0 18px;
-    max-width: 85%;
+    background: var(--brand-tint);
+    padding: 14px 20px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 80%;
     font-size: 15px;
+    font-weight: 400;
     color: var(--text-primary);
-    border: 1px solid var(--border-subtle);
+    border: 1px solid rgba(129, 140, 248, 0.2);
+    box-shadow: var(--shadow-sm);
     animation: slideUp 0.3s ease-out;
   }
 
@@ -188,7 +203,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 24px;
     width: 100%;
     animation: fadeIn 0.4s ease-out;
   }
@@ -196,20 +211,56 @@
   .agent-blocks {
     display: flex;
     flex-direction: column;
-    gap: 12px;
     width: 100%;
+    position: relative;
+    padding-left: 20px;
+  }
+
+  /* Timeline line */
+  .agent-blocks::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    background: var(--border-subtle);
+    border-radius: 2px;
   }
 
   /* Collapsible Steps */
   .step-block {
     background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    position: relative;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    border: 1px solid transparent;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .step-block:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    transform: translateY(-1px);
+  }
+  .step-block::before {
+    content: '';
+    position: absolute;
+    left: -17px;
+    top: 18px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--border-lighter);
+    border: 2px solid var(--bg-base);
+    z-index: 1;
+    transition: background 0.3s;
+  }
+  .step-block.expanded::before {
+    background: var(--brand-primary);
   }
 
   .step-summary {
-    padding: 12px 16px;
+    padding: 14px 16px;
     display: flex;
     align-items: center;
     gap: 12px;
@@ -217,70 +268,112 @@
     user-select: none;
     transition: background 0.2s;
   }
-  .step-summary:hover { background: rgba(255, 255, 255, 0.02); }
 
   .step-icon {
-    width: 20px; height: 20px;
+    width: 16px; height: 16px;
     display: flex; align-items: center; justify-content: center;
     color: var(--text-secondary);
-    transition: transform 0.2s;
+    transition: transform 0.3s ease;
+    font-size: 10px;
   }
-  .step-block.expanded .step-icon { transform: rotate(90deg); }
+  .step-block.expanded .step-icon { transform: rotate(90deg); color: var(--brand-primary); }
 
   .step-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--text-primary);
     flex: 1;
   }
 
+  .step-details-wrapper {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.3s ease-out;
+  }
+  .step-block.expanded .step-details-wrapper {
+    grid-template-rows: 1fr;
+  }
+  .step-details-inner {
+    overflow: hidden;
+  }
+
   .step-details {
-    display: none;
-    padding: 16px;
-    border-top: 1px solid var(--border-subtle);
-    background: rgba(0,0,0,0.15);
+    padding: 0 16px 16px 16px;
     font-size: 13px;
     color: var(--text-secondary);
+    line-height: 1.6;
   }
-  .step-block.expanded .step-details { display: block; animation: slideDown 0.2s ease-out; }
 
-  @keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
   /* Markdown Report */
-  .report-content {
-    background: transparent;
-    padding: 10px 0;
+  .report-container {
+    margin-top: 8px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-subtle);
     width: 100%;
-    animation: fadeIn 0.4s ease-out;
+  }
+  .report-header {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--brand-primary);
+    margin-bottom: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .report-content {
+    background: var(--bg-surface);
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: var(--shadow-sm);
     color: var(--text-primary);
     font-size: 15px;
     line-height: 1.7;
+    animation: fadeIn 0.4s ease-out;
+    border: 1px solid var(--border-subtle);
   }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
   .report-content h1, .report-content h2, .report-content h3 {
-    margin-top: 24px; margin-bottom: 12px;
+    margin-top: 32px; margin-bottom: 16px;
     font-weight: 600;
+    color: #fff;
+    line-height: 1.3;
   }
-  .report-content h1 { font-size: 24px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; }
-  .report-content h2 { font-size: 18px; }
-  .report-content p { margin-bottom: 16px; }
-  .report-content ul, .report-content ol { padding-left: 20px; margin-bottom: 16px; }
-  .report-content li { margin-bottom: 6px; }
-  .report-content a { color: var(--brand-primary); text-decoration: none; }
+  .report-content h1:first-child, .report-content h2:first-child, .report-content h3:first-child {
+    margin-top: 0;
+  }
+  .report-content h1 { font-size: 26px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; }
+  .report-content h2 { font-size: 20px; }
+  .report-content p { margin-bottom: 18px; }
+  .report-content ul, .report-content ol { padding-left: 24px; margin-bottom: 18px; }
+  .report-content li { margin-bottom: 8px; }
+  .report-content strong { color: #fff; font-weight: 600; }
+  .report-content a { color: var(--brand-primary); text-decoration: none; font-weight: 500; }
   .report-content a:hover { text-decoration: underline; }
   .report-content pre {
-    background: var(--bg-surface); padding: 16px; border-radius: 8px;
-    overflow-x: auto; font-family: var(--font-mono); font-size: 13px;
+    background: var(--bg-base); 
+    padding: 16px; 
+    border-radius: 8px;
+    overflow-x: auto; 
+    font-family: var(--font-mono); 
+    font-size: 13px;
     border: 1px solid var(--border-subtle);
-    margin-bottom: 16px;
+    margin-bottom: 18px;
   }
   .report-content code {
-    font-family: var(--font-mono); font-size: 13px;
-    background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px;
+    font-family: var(--font-mono); 
+    font-size: 13px;
+    background: rgba(255,255,255,0.08); 
+    padding: 3px 6px; 
+    border-radius: 4px;
+    color: #e2e8f0;
   }
-  .report-content pre code { background: transparent; padding: 0; }
+  .report-content pre code { background: transparent; padding: 0; color: inherit; }
 
   /* Error block inline */
   .error-block {
@@ -295,21 +388,48 @@
   }
 
   .loading-indicator {
-    font-size: 13px; color: var(--text-secondary);
-    display: flex; align-items: center; gap: 8px;
-    padding: 12px;
+    font-size: 13px; 
+    color: var(--text-primary);
+    display: inline-flex; 
+    align-items: center; 
+    gap: 12px;
+    padding: 10px 16px;
     background: var(--bg-surface);
     border: 1px solid var(--border-subtle);
     border-radius: 20px;
+    box-shadow: var(--shadow-sm);
+    margin-left: 20px; /* align with timeline */
+    position: relative;
     align-self: flex-start;
   }
-  .loading-indicator::after {
-    content: ''; width: 14px; height: 14px;
-    border: 2px solid var(--text-secondary);
-    border-top-color: transparent; border-radius: 50%;
-    animation: spin 1s linear infinite;
+  .loading-indicator::before {
+    content: '';
+    position: absolute;
+    left: -17px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--brand-primary);
+    box-shadow: 0 0 8px var(--brand-primary);
+    animation: pulse 1.5s infinite;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse {
+    0% { opacity: 0.5; transform: translateY(-50%) scale(0.8); }
+    50% { opacity: 1; transform: translateY(-50%) scale(1.2); }
+    100% { opacity: 0.5; transform: translateY(-50%) scale(0.8); }
+  }
+  .loading-dots { display: flex; gap: 4px; align-items: center; }
+  .loading-dots span {
+    width: 4px; height: 4px;
+    background: currentColor;
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out both;
+  }
+  .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+  .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+  @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
   
   .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -320,8 +440,8 @@
 
   /* ── Bottom Input Area ── */
   .input-area {
-    padding: 20px 40px;
-    background: linear-gradient(to top, var(--bg-base) 60%, transparent);
+    padding: 24px 40px;
+    background: linear-gradient(to top, var(--bg-base) 70%, transparent);
     display: flex;
     justify-content: center;
     width: 100%;
@@ -332,17 +452,17 @@
     width: 100%;
     max-width: 800px;
     background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 16px;
+    border: 1px solid var(--border-lighter);
+    border-radius: 12px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: var(--shadow-md);
     position: relative;
     transition: border-color 0.2s, box-shadow 0.2s;
   }
   .input-container:focus-within {
     border-color: var(--brand-primary);
-    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.1), 0 4px 20px rgba(0,0,0,0.2);
+    box-shadow: 0 0 0 1px var(--brand-primary), var(--shadow-md);
   }
 
   .input-controls {
@@ -357,17 +477,17 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-radius: 6px;
     transition: background 0.2s, color 0.2s;
   }
-  .mode-selector:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+  .mode-selector:hover { background: rgba(255,255,255,0.08); }
   .mode-selector.active { color: var(--brand-primary); }
 
   .mode-dropdown {
@@ -384,7 +504,7 @@
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     min-width: 160px;
   }
-  .mode-dropdown.show { display: flex; }
+  .mode-dropdown.show { display: flex; animation: slideUp 0.2s ease-out; }
   
   .mode-option {
     padding: 8px 12px;
@@ -419,25 +539,29 @@
     padding: 0;
     line-height: 1.5;
   }
-  .query-input::placeholder { color: #475569; }
+  .query-input::placeholder { color: #52525b; }
 
   .btn-send {
-    background: var(--text-primary);
-    color: var(--bg-base);
+    background: var(--brand-primary);
+    color: #fff;
     border: none;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: transform 0.1s, opacity 0.2s;
+    transition: all 0.2s ease;
     flex-shrink: 0;
   }
-  .btn-send:hover { transform: scale(1.05); }
-  .btn-send:active { transform: scale(0.95); }
-  .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-send:hover:not(:disabled) { 
+    background: #6366f1; 
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  }
+  .btn-send:active:not(:disabled) { transform: translateY(0); }
+  .btn-send:disabled { background: var(--border-subtle); color: var(--text-secondary); opacity: 0.5; cursor: not-allowed; }
   .btn-send svg { width: 16px; height: 16px; fill: currentColor; }
 
 </style>
@@ -495,7 +619,19 @@ let selectedMode = 'research'; // 'research' or 'agent'
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
-  loadHistory();
+  const hash = window.location.hash;
+  if (hash && hash.includes('/')) {
+    const parts = hash.substring(1).split('/');
+    if (parts.length === 2) {
+      currentRunType = parts[0];
+      currentRunId = parts[1];
+      loadRun(currentRunType, currentRunId);
+    } else {
+      loadHistory();
+    }
+  } else {
+    loadHistory();
+  }
   
   const input = document.getElementById('query-input');
   input.addEventListener('keydown', e => {
@@ -533,7 +669,7 @@ function autoResize(el) {
 
 function scrollToBottom() {
   const scroll = document.getElementById('thread-scroll');
-  scroll.scrollTop = scroll.scrollHeight;
+  scroll.scrollTo({ top: scroll.scrollHeight, behavior: 'smooth' });
 }
 
 async function loadHistory() {
@@ -553,8 +689,6 @@ async function loadHistory() {
       return;
     }
     
-    // Hide empty state if there are history items and we haven't selected anything yet, wait, 
-    // actually empty state should only show when currentRunId is null
     if (!currentRunId) {
        document.getElementById('empty-state').style.display = 'flex';
     }
@@ -584,6 +718,8 @@ function startNew() {
   stopPolling();
   currentRunId = null;
   currentRunType = null;
+  
+  window.history.replaceState(null, null, ' ');
   
   const input = document.getElementById('query-input');
   input.value = '';
@@ -631,9 +767,8 @@ async function submitQuery() {
     
     const data = await res.json();
     currentRunId = data.run_id;
+    window.history.replaceState(null, null, `#${type}/${currentRunId}`);
     
-    // We don't call loadRun directly because it clears the screen, and we already showed the bubble
-    // We just start polling.
     pollStatus();
     loadHistory(); // refresh sidebar to show new item
     
@@ -653,6 +788,8 @@ function loadRun(type, id) {
   stopPolling();
   currentRunType = type;
   currentRunId = id;
+  
+  window.history.replaceState(null, null, `#${type}/${id}`);
   
   document.getElementById('empty-state').style.display = 'none';
   
@@ -712,14 +849,12 @@ function renderThread(data) {
   const thread = document.getElementById('thread');
   const run = data.run;
   
-  // Ensure User bubble exists (if we loaded from history)
   if (!document.getElementById('user-bubble-' + run.id)) {
       const div = document.createElement('div');
       div.id = 'user-bubble-' + run.id;
       div.className = 'user-bubble';
       div.textContent = run.goal;
       
-      // Insert right after empty state
       if (thread.children.length > 0 && thread.children[0].id === 'empty-state') {
           thread.insertBefore(div, thread.children[0].nextSibling);
       } else {
@@ -727,7 +862,6 @@ function renderThread(data) {
       }
   }
   
-  // Create or get the agent container
   let agentContainer = document.getElementById('agent-container-' + run.id);
   if (!agentContainer) {
     agentContainer = document.createElement('div');
@@ -736,7 +870,6 @@ function renderThread(data) {
     thread.appendChild(agentContainer);
   }
   
-  // Create or get blocks container inside agent container
   let blocksContainer = document.getElementById('blocks-container-' + run.id);
   if (!blocksContainer) {
       blocksContainer = document.createElement('div');
@@ -745,8 +878,6 @@ function renderThread(data) {
       agentContainer.appendChild(blocksContainer);
   }
   
-  // To avoid flickering, we will selectively add/update blocks instead of innerHTML=''
-  // But for simplicity of this fix, we redraw and restore expanded states
   const expandedStates = new Set();
   Array.from(blocksContainer.children).forEach((c, i) => {
       if (c.classList.contains('expanded')) expandedStates.add(i);
@@ -782,35 +913,44 @@ function renderThread(data) {
           <div class="step-icon">▶</div>
           <div class="step-title">${escapeHtml(summary)}</div>
         </div>
-        <div class="step-details">${detailsHTML}</div>
+        <div class="step-details-wrapper">
+          <div class="step-details-inner">
+            <div class="step-details">${detailsHTML}</div>
+          </div>
+        </div>
       `;
       blocksContainer.appendChild(block);
     });
     
-    // Manage Loading Indicator
     let loader = document.getElementById('loader-' + run.id);
     if (run.status === 'running') {
+        const txt = sqs.length === 0 ? "Initializing research plan..." : "Researching in progress...";
         if (!loader) {
             loader = document.createElement('div');
             loader.id = 'loader-' + run.id;
             loader.className = 'loading-indicator';
-            loader.textContent = sqs.length === 0 ? "Initializing research plan..." : "Researching in progress...";
+            loader.innerHTML = `<span>${txt}</span><div class="loading-dots"><span></span><span></span><span></span></div>`;
             agentContainer.appendChild(loader);
             scrollToBottom();
         } else {
-            loader.textContent = sqs.length === 0 ? "Initializing research plan..." : "Researching in progress...";
+            loader.querySelector('span').textContent = txt;
         }
     } else if (loader) {
         loader.remove();
     }
     
-    // Final Report
     if (run.report_md && !document.getElementById('report-' + run.id)) {
-      const report = document.createElement('div');
-      report.id = 'report-' + run.id;
-      report.className = 'report-content';
-      report.innerHTML = marked.parse(run.report_md);
-      agentContainer.appendChild(report);
+      const reportWrap = document.createElement('div');
+      reportWrap.id = 'report-' + run.id;
+      reportWrap.className = 'report-container';
+      reportWrap.innerHTML = `
+        <div class="report-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Final Report
+        </div>
+        <div class="report-content">${marked.parse(run.report_md)}</div>
+      `;
+      agentContainer.appendChild(reportWrap);
       scrollToBottom();
     }
     
@@ -834,40 +974,48 @@ function renderThread(data) {
           <div class="step-icon">▶</div>
           <div class="step-title">${escapeHtml(summary)}</div>
         </div>
-        <div class="step-details">${detailsHTML}</div>
+        <div class="step-details-wrapper">
+          <div class="step-details-inner">
+            <div class="step-details">${detailsHTML}</div>
+          </div>
+        </div>
       `;
       blocksContainer.appendChild(block);
     });
     
     let loader = document.getElementById('loader-' + run.id);
     if (run.status === 'running') {
+        const txt = steps.length === 0 ? "Agent starting..." : "Agent executing...";
         if (!loader) {
             loader = document.createElement('div');
             loader.id = 'loader-' + run.id;
             loader.className = 'loading-indicator';
-            loader.textContent = steps.length === 0 ? "Agent starting..." : "Agent executing...";
+            loader.innerHTML = `<span>${txt}</span><div class="loading-dots"><span></span><span></span><span></span></div>`;
             agentContainer.appendChild(loader);
             scrollToBottom();
         } else {
-            loader.textContent = steps.length === 0 ? "Agent starting..." : "Agent executing...";
+            loader.querySelector('span').textContent = txt;
         }
     } else if (loader) {
         loader.remove();
     }
     
     if (run.status === 'completed' && run.result && !document.getElementById('report-' + run.id)) {
-      const report = document.createElement('div');
-      report.id = 'report-' + run.id;
-      report.className = 'report-content';
-      
-      // Parse markdown in case agent returned markdown
-      report.innerHTML = marked.parse(run.result);
-      agentContainer.appendChild(report);
+      const reportWrap = document.createElement('div');
+      reportWrap.id = 'report-' + run.id;
+      reportWrap.className = 'report-container';
+      reportWrap.innerHTML = `
+        <div class="report-header">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Final Report
+        </div>
+        <div class="report-content">${marked.parse(run.result)}</div>
+      `;
+      agentContainer.appendChild(reportWrap);
       scrollToBottom();
     }
   }
   
-  // Terminal Error State
   if ((run.status === 'failed' || run.status === 'max_steps_exceeded') && !document.getElementById('error-' + run.id)) {
     const err = document.createElement('div');
     err.id = 'error-' + run.id;
@@ -876,9 +1024,6 @@ function renderThread(data) {
     agentContainer.appendChild(err);
     scrollToBottom();
   }
-  
-  // We don't automatically scroll on every poll update unless we added a new block to avoid jumping when user scrolls up
-  // The scrollToBottom() is called when new major elements (report, error, initial bubble) are added.
 }
 
 function escapeHtml(unsafe) {

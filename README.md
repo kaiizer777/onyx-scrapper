@@ -66,7 +66,7 @@
 - **🎯 Semantic Element Finder**: AI-powered DOM locator using natural language instead of brittle CSS selectors.
 - **📊 Structured JSON Extraction**: Schema-driven extraction (articles, products, events, custom schemas) via MiMo V2.5.
 - **🤖 ReAct Agent Loop**: Autonomous multi-step agent — plans, navigates, finds elements, types, clicks, extracts — from a plain-English goal.
-- **🧠 Deep Research Mode**: Multi-threaded orchestrator that decomposes a query into sub-questions, spawns parallel worker agents against the full discovery layer, and compiles a cited report. Includes a web UI.
+- **🧠 Deep Research Mode**: Multi-threaded orchestrator that decomposes a query into sub-questions, spawns parallel worker agents against the full discovery layer, and compiles a cited report. Includes a unified web UI.
 - **⚖️ Finding Confidence & Reranking**: Optional Jina Reranker pass (free tier, 100 RPM) scores retrieved chunks for relevance before synthesis, and cross-source claims are flagged when confidence disagrees across `findings` rows.
 - **🔍 Local Knowledge Lake (FTS5)**: Embedded SQLite with full-text search across `pages`, `extractions`, `agent_runs`, `agent_steps`, `research_runs`, `research_subquestions`, `findings`.
 - **⏰ Ticker Scheduler Daemon**: Background recurring scraper driven by `schedule.yaml` for unattended monitoring.
@@ -162,8 +162,8 @@ scraperapi_key: "YOUR_SCRAPERAPI_KEY"  # optional, last-resort fallback
 
 ### 7. Deep Research
 ```bash
-.\onyx.exe research "latest advancements in solid state batteries"
-.\onyx.exe research "compare EU vs US AI regulation" --max-subquestions 6 --sources searxng,tinyfish,jina --json
+.\onyx.exe deep-research "latest advancements in solid state batteries"
+.\onyx.exe deep-research "compare EU vs US AI regulation" --max-questions 6 --sources searxng,tinyfish,jina --json
 ```
 
 ### 8. Crawl Site or Sitemap
@@ -200,7 +200,13 @@ scraperapi_key: "YOUR_SCRAPERAPI_KEY"  # optional, last-resort fallback
 | `/agent` | POST | Trigger autonomous agent | `curl -X POST http://localhost:9090/agent -d '{"goal":"extract title from https://example.com"}'` |
 | `/deep-research` | POST | Trigger deep research | `curl -X POST http://localhost:9090/deep-research -d '{"query":"latest advancements in solid state batteries"}'` |
 | `/crawl` | POST | Start background crawl | `curl -X POST http://localhost:9090/crawl -d '{"url":"https://example.com"}'` |
-| `/ui/research` | GET | Deep Research Web UI | Open `http://localhost:9090/ui/research` |
+| `/ui` | GET | Unified Agent & Research Web UI | Open `http://localhost:9090/ui` |
+
+### 🖥️ Web UI
+
+Accessible at `http://localhost:9090/ui`. 
+This unified single-page application replaces the older multi-page dashboard. The core interaction allows you to pick a mode (Deep Research or Agent), type a query, watch the execution steps stream in live with collapsible details, and view the final generated markdown report. 
+*Note: The UI is built using plain HTML/CSS/JS + Go templates, with no frontend framework or build step required.*
 
 ---
 
@@ -254,6 +260,8 @@ All providers are opt-in via `config.yaml`; disabling any of them degrades grace
 
 ## 🛠️ Known Issues Fixed During Testing
 
+- **UI State Persistence:** Fixed an issue where refreshing the browser during an active chat would clear the UI; the state is now correctly restored via URL hashing.
+- **StartedAt Template Panic:** Fixed a UI crash related to rendering the `started_at` timestamp in the history list.
 - **Cloudflare Detection False-Positives:** Detection now requires actual challenge-page signatures and short body length, not just vendor name matches.
 - **Bare Domain Handling:** Bare domains (e.g. `example.com`) auto-prepend `https://` instead of crashing.
 

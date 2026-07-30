@@ -133,6 +133,9 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("failed to execute schema: %w", err)
 	}
 
+	// Auto-migrate schema fixes
+	db.Exec("ALTER TABLE findings ADD COLUMN source_provider TEXT;")
+
 	return &Store{db: db}, nil
 }
 
