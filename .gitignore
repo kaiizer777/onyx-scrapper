@@ -28,3 +28,33 @@ vendor/
 .idea/
 .vscode/
 *.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Build and execution directories
+build/
+dist/
+bin/
+
+# Local databases and logs
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.log
+
+# Go workspace and coverage
+go.work
+go.work.sum
+coverage.out
+coverage.txt
+
+# Local temporary scratchpads and output dumps
+body.json
+test_body.json
+output.html
+temp.js
+work.md
+test_blocked.go
