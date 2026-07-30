@@ -75,6 +75,14 @@ type Stats struct {
 	DeepResearchRuns int
 }
 
+type RunHistoryItem struct {
+	ID        int64     `json:"id"`
+	Type      string    `json:"type"` // "agent" or "research"
+	Goal      string    `json:"goal"`
+	Status    string    `json:"status"`
+	StartedAt time.Time `json:"started_at"`
+}
+
 type ResearchSubQuestion struct {
 	ID       int64  `json:"id"`
 	RunID    int64  `json:"run_id"`
@@ -614,4 +622,40 @@ func (s *Store) GetStats() (Stats, error) {
 		return stats, fmt.Errorf("failed to count research runs: %w", err)
 	}
 	return stats, nil
+}
+
+// GetMergedHistory retrieves a merged and chronologically sorted list of recent agent and research runs.
+func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := `
+		SELECT * FROM (
+			SELECT id, 'agent' as type, goal, status, created_at as started_at
+			FROM agent_runs
+			UNION ALL
+			SELECT id, 'research' as type, goal, status, started_at
+			FROM research_runs
+		)
+		ORDER BY started_at DESC
+		LIMIT ?;
+	`
+	rows, err := s.db.Query(query, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query merged history: %w", err)
+	}
+	defer rows.Close()
+
+	var history []RunHistoryItem
+	for rows.Next() {
+		var item RunHistoryItem
+		if err := rows.Scan(&item.ID, &item.Type, &item.Goal, &item.Status, &item.StartedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan run history item: %w", err)
+		}
+		history = append(history, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating merged history: %w", err)
+	}
+	return history, nil
 }

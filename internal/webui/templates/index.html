@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx Agent Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<!-- Marked for Markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg-base: #0f1115;
+    --bg-surface: #181b21;
+    --bg-surface-hover: #21252d;
+    --border-subtle: #2a2e37;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --brand-primary: #818cf8;
+    --brand-gradient: linear-gradient(135deg, #818cf8 0%, #c084fc 100%);
+    
+    --status-run: #f59e0b;
+    --status-done: #10b981;
+    --status-err: #ef4444;
+
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-mono: 'Fira Code', monospace;
+    --sidebar-w: 280px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--bg-base);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--bg-surface-hover); border-radius: 4px; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--bg-surface);
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+  }
+  
+  .sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .logo {
+    font-weight: 600;
+    font-size: 16px;
+    background: var(--brand-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+  }
+
+  .btn-new {
+    background: rgba(129, 140, 248, 0.1);
+    color: var(--brand-primary);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-new:hover { background: rgba(129, 140, 248, 0.2); }
+
+  .history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .history-item {
+    padding: 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    background: transparent;
+  }
+  .history-item:hover { background: rgba(255, 255, 255, 0.02); }
+  .history-item.active {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-subtle);
+  }
+
+  .h-goal {
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .h-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  
+  .badge {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 10px;
+    background: var(--bg-base);
+  }
+  .badge.running { color: var(--status-run); }
+  .badge.completed, .badge.done { color: var(--status-done); }
+  .badge.failed, .badge.error { color: var(--status-err); }
+
+  /* ── Main Panel ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background: var(--bg-base);
+    background-image: radial-gradient(circle at top center, rgba(129, 140, 248, 0.05), transparent 40%);
+  }
+
+  /* Chat Thread */
+  .thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center content horizontally */
+  }
+
+  .thread-content {
+    width: 100%;
+    max-width: 800px; /* Keep chat centered and constrained */
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 20px;
+  }
+
+  /* User Bubble */
+  .user-bubble {
+    align-self: flex-end;
+    background: var(--bg-surface-hover);
+    padding: 12px 18px;
+    border-radius: 18px 18px 0 18px;
+    max-width: 85%;
+    font-size: 15px;
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    animation: slideUp 0.3s ease-out;
+  }
+
+  /* Agent Container */
+  .agent-container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    animation: fadeIn 0.4s ease-out;
+  }
+
+  .agent-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  /* Collapsible Steps */
+  .step-block {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .step-summary {
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s;
+  }
+  .step-summary:hover { background: rgba(255, 255, 255, 0.02); }
+
+  .step-icon {
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+  }
+  .step-block.expanded .step-icon { transform: rotate(90deg); }
+
+  .step-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+  }
+
+  .step-details {
+    display: none;
+    padding: 16px;
+    border-top: 1px solid var(--border-subtle);
+    background: rgba(0,0,0,0.15);
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .step-block.expanded .step-details { display: block; animation: slideDown 0.2s ease-out; }
+
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* Markdown Report */
+  .report-content {
+    background: transparent;
+    padding: 10px 0;
+    width: 100%;
+    animation: fadeIn 0.4s ease-out;
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .report-content h1, .report-content h2, .report-content h3 {
+    margin-top: 24px; margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .report-content h1 { font-size: 24px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; }
+  .report-content h2 { font-size: 18px; }
+  .report-content p { margin-bottom: 16px; }
+  .report-content ul, .report-content ol { padding-left: 20px; margin-bottom: 16px; }
+  .report-content li { margin-bottom: 6px; }
+  .report-content a { color: var(--brand-primary); text-decoration: none; }
+  .report-content a:hover { text-decoration: underline; }
+  .report-content pre {
+    background: var(--bg-surface); padding: 16px; border-radius: 8px;
+    overflow-x: auto; font-family: var(--font-mono); font-size: 13px;
+    border: 1px solid var(--border-subtle);
+    margin-bottom: 16px;
+  }
+  .report-content code {
+    font-family: var(--font-mono); font-size: 13px;
+    background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 4px;
+  }
+  .report-content pre code { background: transparent; padding: 0; }
+
+  /* Error block inline */
+  .error-block {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    color: #fca5a5;
+    font-size: 14px;
+    font-family: var(--font-mono);
+    width: 100%;
+  }
+
+  .loading-indicator {
+    font-size: 13px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 20px;
+    align-self: flex-start;
+  }
+  .loading-indicator::after {
+    content: ''; width: 14px; height: 14px;
+    border: 2px solid var(--text-secondary);
+    border-top-color: transparent; border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--text-secondary); text-align: center;
+    margin: auto 0;
+  }
+  .empty-state h3 { font-size: 20px; margin-bottom: 8px; color: var(--text-primary); font-weight: 500;}
+
+  /* ── Bottom Input Area ── */
+  .input-area {
+    padding: 20px 40px;
+    background: linear-gradient(to top, var(--bg-base) 60%, transparent);
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    z-index: 10;
+  }
+
+  .input-container {
+    width: 100%;
+    max-width: 800px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+    position: relative;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-container:focus-within {
+    border-color: var(--brand-primary);
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.1), 0 4px 20px rgba(0,0,0,0.2);
+  }
+
+  .input-controls {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    position: relative;
+  }
+
+  .mode-selector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: background 0.2s, color 0.2s;
+  }
+  .mode-selector:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+  .mode-selector.active { color: var(--brand-primary); }
+
+  .mode-dropdown {
+    position: absolute;
+    bottom: 100%; left: 12px;
+    margin-bottom: 8px;
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 4px;
+    display: none;
+    flex-direction: column;
+    z-index: 20;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    min-width: 160px;
+  }
+  .mode-dropdown.show { display: flex; }
+  
+  .mode-option {
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mode-option:hover { background: var(--brand-primary); color: white; }
+
+  .input-row {
+    display: flex;
+    align-items: flex-end;
+    padding: 10px 16px 16px 16px;
+    gap: 12px;
+  }
+
+  .query-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    outline: none;
+    resize: none;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0;
+    line-height: 1.5;
+  }
+  .query-input::placeholder { color: #475569; }
+
+  .btn-send {
+    background: var(--text-primary);
+    color: var(--bg-base);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.1s, opacity 0.2s;
+    flex-shrink: 0;
+  }
+  .btn-send:hover { transform: scale(1.05); }
+  .btn-send:active { transform: scale(0.95); }
+  .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-send svg { width: 16px; height: 16px; fill: currentColor; }
+
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">Onyx Agent</div>
+    <button class="btn-new" onclick="startNew()">+ New</button>
+  </div>
+  <div class="history-list" id="history-list">
+    <!-- History items populated here -->
+  </div>
+</div>
+
+<div class="main">
+  <div class="thread" id="thread-scroll">
+    <div class="thread-content" id="thread">
+      <div class="empty-state" id="empty-state">
+        <h3>Ready to research</h3>
+        <p>Ask a question or provide a task to begin.</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="input-area">
+    <div class="input-container">
+      <div class="input-controls">
+        <button class="mode-selector" id="mode-selector-btn" onclick="toggleModeDropdown(event)">
+          <span style="font-size:14px; font-weight:bold">+</span>
+          <span id="current-mode-label">🔍 Deep Research</span>
+          <span style="font-size:10px">▼</span>
+        </button>
+        <div class="mode-dropdown" id="mode-dropdown">
+          <div class="mode-option" onclick="setMode('research')">🔍 Deep Research</div>
+          <div class="mode-option" onclick="setMode('agent')">⚡ Agent</div>
+        </div>
+      </div>
+      <div class="input-row">
+        <textarea id="query-input" class="query-input" placeholder="Message Onyx..." rows="1" oninput="autoResize(this)"></textarea>
+        <button id="btn-send" class="btn-send" onclick="submitQuery()">
+          <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentPoll = null;
+let currentRunId = null;
+let currentRunType = null;
+let selectedMode = 'research'; // 'research' or 'agent'
+
+// Initialization
+document.addEventListener('DOMContentLoaded', () => {
+  loadHistory();
+  
+  const input = document.getElementById('query-input');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitQuery();
+    }
+  });
+  
+  // Close dropdown on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#mode-selector-btn')) {
+      document.getElementById('mode-dropdown').classList.remove('show');
+    }
+  });
+});
+
+function toggleModeDropdown(e) {
+  e.stopPropagation();
+  document.getElementById('mode-dropdown').classList.toggle('show');
+}
+
+function setMode(mode) {
+  selectedMode = mode;
+  const label = mode === 'research' ? '🔍 Deep Research' : '⚡ Agent';
+  document.getElementById('current-mode-label').textContent = label;
+  document.getElementById('mode-dropdown').classList.remove('show');
+  document.getElementById('query-input').focus();
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight) + 'px';
+}
+
+function scrollToBottom() {
+  const scroll = document.getElementById('thread-scroll');
+  scroll.scrollTop = scroll.scrollHeight;
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/ui/history');
+    const items = await res.json();
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    
+    if (items.length === 0) {
+      list.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary); font-size: 13px;">No past runs</div>';
+      
+      // Only show empty state if we don't have an active run loaded
+      if (!currentRunId) {
+        document.getElementById('empty-state').style.display = 'flex';
+      }
+      return;
+    }
+    
+    // Hide empty state if there are history items and we haven't selected anything yet, wait, 
+    // actually empty state should only show when currentRunId is null
+    if (!currentRunId) {
+       document.getElementById('empty-state').style.display = 'flex';
+    }
+    
+    items.forEach(item => {
+      const div = document.createElement('div');
+      div.className = `history-item ${item.id === currentRunId && item.type === currentRunType ? 'active' : ''}`;
+      div.onclick = () => loadRun(item.type, item.id);
+      
+      const date = new Date(item.started_at).toLocaleDateString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+      div.innerHTML = `
+        <div class="h-goal">${escapeHtml(item.goal)}</div>
+        <div class="h-meta">
+          <span class="badge ${item.status}">${item.status}</span>
+          <span>${item.type}</span>
+          <span style="margin-left:auto">${date}</span>
+        </div>
+      `;
+      list.appendChild(div);
+    });
+  } catch (err) {
+    console.error("Failed to load history", err);
+  }
+}
+
+function startNew() {
+  stopPolling();
+  currentRunId = null;
+  currentRunType = null;
+  
+  const input = document.getElementById('query-input');
+  input.value = '';
+  autoResize(input);
+  
+  document.getElementById('empty-state').style.display = 'flex';
+  
+  // Clear thread except empty state
+  const thread = document.getElementById('thread');
+  Array.from(thread.children).forEach(c => {
+    if (c.id !== 'empty-state') c.remove();
+  });
+  
+  loadHistory(); // unhighlight sidebar
+  input.focus();
+}
+
+async function submitQuery() {
+  const input = document.getElementById('query-input');
+  const query = input.value.trim();
+  if (!query) return;
+  
+  const btn = document.getElementById('btn-send');
+  btn.disabled = true;
+  
+  // Clear screen and show bubble immediately
+  startNew(); 
+  document.getElementById('empty-state').style.display = 'none';
+  appendUserBubble(query);
+  
+  const type = selectedMode;
+  currentRunType = type;
+  
+  try {
+    const endpoint = type === 'agent' ? '/agent/async' : '/deep-research';
+    const bodyPayload = type === 'agent' ? { goal: query } : { query: query };
+    
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bodyPayload)
+    });
+    
+    if (!res.ok) throw new Error(await res.text());
+    
+    const data = await res.json();
+    currentRunId = data.run_id;
+    
+    // We don't call loadRun directly because it clears the screen, and we already showed the bubble
+    // We just start polling.
+    pollStatus();
+    loadHistory(); // refresh sidebar to show new item
+    
+  } catch (err) {
+    const thread = document.getElementById('thread');
+    const errBlock = document.createElement('div');
+    errBlock.className = 'error-block';
+    errBlock.textContent = "Failed to start run: " + err.message;
+    thread.appendChild(errBlock);
+    scrollToBottom();
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function loadRun(type, id) {
+  stopPolling();
+  currentRunType = type;
+  currentRunId = id;
+  
+  document.getElementById('empty-state').style.display = 'none';
+  
+  const thread = document.getElementById('thread');
+  Array.from(thread.children).forEach(c => {
+    if (c.id !== 'empty-state') c.remove();
+  });
+  
+  loadHistory(); // update active state
+  pollStatus();
+}
+
+function stopPolling() {
+  if (currentPoll) {
+    clearTimeout(currentPoll);
+    currentPoll = null;
+  }
+}
+
+function appendUserBubble(text) {
+  const thread = document.getElementById('thread');
+  const div = document.createElement('div');
+  div.className = 'user-bubble';
+  div.textContent = text;
+  thread.appendChild(div);
+  scrollToBottom();
+}
+
+async function pollStatus() {
+  if (!currentRunId || !currentRunType) return;
+  
+  try {
+    const endpoint = currentRunType === 'agent' 
+      ? `/agent/runs/${currentRunId}` 
+      : `/deep-research/${currentRunId}`;
+      
+    const res = await fetch(endpoint);
+    if (!res.ok) throw new Error("Failed to fetch status");
+    const data = await res.json();
+    
+    renderThread(data);
+    
+    const status = data.run.status;
+    if (status !== 'completed' && status !== 'failed' && status !== 'max_steps_exceeded') {
+      currentPoll = setTimeout(pollStatus, 1500);
+    } else {
+      // Reload history one last time to update status in sidebar
+      loadHistory();
+    }
+  } catch (err) {
+    console.error("Polling error", err);
+    currentPoll = setTimeout(pollStatus, 3000);
+  }
+}
+
+function renderThread(data) {
+  const thread = document.getElementById('thread');
+  const run = data.run;
+  
+  // Ensure User bubble exists (if we loaded from history)
+  if (!document.getElementById('user-bubble-' + run.id)) {
+      const div = document.createElement('div');
+      div.id = 'user-bubble-' + run.id;
+      div.className = 'user-bubble';
+      div.textContent = run.goal;
+      
+      // Insert right after empty state
+      if (thread.children.length > 0 && thread.children[0].id === 'empty-state') {
+          thread.insertBefore(div, thread.children[0].nextSibling);
+      } else {
+          thread.insertBefore(div, thread.firstChild);
+      }
+  }
+  
+  // Create or get the agent container
+  let agentContainer = document.getElementById('agent-container-' + run.id);
+  if (!agentContainer) {
+    agentContainer = document.createElement('div');
+    agentContainer.id = 'agent-container-' + run.id;
+    agentContainer.className = 'agent-container';
+    thread.appendChild(agentContainer);
+  }
+  
+  // Create or get blocks container inside agent container
+  let blocksContainer = document.getElementById('blocks-container-' + run.id);
+  if (!blocksContainer) {
+      blocksContainer = document.createElement('div');
+      blocksContainer.id = 'blocks-container-' + run.id;
+      blocksContainer.className = 'agent-blocks';
+      agentContainer.appendChild(blocksContainer);
+  }
+  
+  // To avoid flickering, we will selectively add/update blocks instead of innerHTML=''
+  // But for simplicity of this fix, we redraw and restore expanded states
+  const expandedStates = new Set();
+  Array.from(blocksContainer.children).forEach((c, i) => {
+      if (c.classList.contains('expanded')) expandedStates.add(i);
+  });
+  
+  blocksContainer.innerHTML = '';
+  
+  if (currentRunType === 'research') {
+    const sqs = data.sub_questions || [];
+    const findings = data.findings || [];
+    
+    sqs.forEach((sq, i) => {
+      const block = document.createElement('div');
+      block.className = 'step-block';
+      if (expandedStates.has(i)) block.classList.add('expanded');
+      
+      const fds = findings.filter(f => f.subquestion_id === sq.id);
+      
+      let summary = `Decomposed sub-question ${i+1}: ${sq.question}`;
+      if (sq.status === 'done') summary = `Researched: ${sq.question} (${fds.length} findings)`;
+      
+      let detailsHTML = `<div style="margin-bottom:8px"><strong>Status:</strong> ${sq.status}</div>`;
+      if (fds.length > 0) {
+        detailsHTML += `<ul>` + fds.map(f => `
+          <li>
+            ${escapeHtml(f.claim)}
+            <br><a href="${escapeHtml(f.source_url)}" target="_blank" style="font-size:11px;color:var(--brand-primary)">${escapeHtml(f.source_url)}</a>
+          </li>`).join('') + `</ul>`;
+      }
+      
+      block.innerHTML = `
+        <div class="step-summary" onclick="this.parentElement.classList.toggle('expanded')">
+          <div class="step-icon">▶</div>
+          <div class="step-title">${escapeHtml(summary)}</div>
+        </div>
+        <div class="step-details">${detailsHTML}</div>
+      `;
+      blocksContainer.appendChild(block);
+    });
+    
+    // Manage Loading Indicator
+    let loader = document.getElementById('loader-' + run.id);
+    if (run.status === 'running') {
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.id = 'loader-' + run.id;
+            loader.className = 'loading-indicator';
+            loader.textContent = sqs.length === 0 ? "Initializing research plan..." : "Researching in progress...";
+            agentContainer.appendChild(loader);
+            scrollToBottom();
+        } else {
+            loader.textContent = sqs.length === 0 ? "Initializing research plan..." : "Researching in progress...";
+        }
+    } else if (loader) {
+        loader.remove();
+    }
+    
+    // Final Report
+    if (run.report_md && !document.getElementById('report-' + run.id)) {
+      const report = document.createElement('div');
+      report.id = 'report-' + run.id;
+      report.className = 'report-content';
+      report.innerHTML = marked.parse(run.report_md);
+      agentContainer.appendChild(report);
+      scrollToBottom();
+    }
+    
+  } else if (currentRunType === 'agent') {
+    const steps = data.steps || [];
+    
+    steps.forEach((step, i) => {
+      const block = document.createElement('div');
+      block.className = 'step-block';
+      if (expandedStates.has(i)) block.classList.add('expanded');
+      
+      let summary = `Step ${step.step_number}: ${step.action}`;
+      if (step.error) summary = `Error in ${step.action}`;
+      
+      let detailsHTML = `<pre>${escapeHtml(step.args_json)}</pre>`;
+      if (step.result) detailsHTML += `<div style="margin-top:12px; font-family:var(--font-mono); font-size:12px;"><strong>Result:</strong><br>${escapeHtml(step.result)}</div>`;
+      if (step.error) detailsHTML += `<div style="margin-top:12px; color:var(--status-err); font-family:var(--font-mono); font-size:12px;"><strong>Error:</strong><br>${escapeHtml(step.error)}</div>`;
+      
+      block.innerHTML = `
+        <div class="step-summary" onclick="this.parentElement.classList.toggle('expanded')">
+          <div class="step-icon">▶</div>
+          <div class="step-title">${escapeHtml(summary)}</div>
+        </div>
+        <div class="step-details">${detailsHTML}</div>
+      `;
+      blocksContainer.appendChild(block);
+    });
+    
+    let loader = document.getElementById('loader-' + run.id);
+    if (run.status === 'running') {
+        if (!loader) {
+            loader = document.createElement('div');
+            loader.id = 'loader-' + run.id;
+            loader.className = 'loading-indicator';
+            loader.textContent = steps.length === 0 ? "Agent starting..." : "Agent executing...";
+            agentContainer.appendChild(loader);
+            scrollToBottom();
+        } else {
+            loader.textContent = steps.length === 0 ? "Agent starting..." : "Agent executing...";
+        }
+    } else if (loader) {
+        loader.remove();
+    }
+    
+    if (run.status === 'completed' && run.result && !document.getElementById('report-' + run.id)) {
+      const report = document.createElement('div');
+      report.id = 'report-' + run.id;
+      report.className = 'report-content';
+      
+      // Parse markdown in case agent returned markdown
+      report.innerHTML = marked.parse(run.result);
+      agentContainer.appendChild(report);
+      scrollToBottom();
+    }
+  }
+  
+  // Terminal Error State
+  if ((run.status === 'failed' || run.status === 'max_steps_exceeded') && !document.getElementById('error-' + run.id)) {
+    const err = document.createElement('div');
+    err.id = 'error-' + run.id;
+    err.className = 'error-block';
+    err.innerHTML = `<strong>Run finished with status: ${escapeHtml(run.status)}</strong><br>${escapeHtml(run.result || '')}`;
+    agentContainer.appendChild(err);
+    scrollToBottom();
+  }
+  
+  // We don't automatically scroll on every poll update unless we added a new block to avoid jumping when user scrolls up
+  // The scrollToBottom() is called when new major elements (report, error, initial bubble) are added.
+}
+
+function escapeHtml(unsafe) {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+</script>
+</body>
+</html>
