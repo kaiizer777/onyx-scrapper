@@ -1012,6 +1012,7 @@
           <div class="mode-option" onclick="setMode('research')">🔍 Deep Research</div>
           <div class="mode-option" onclick="setMode('agent')">⚡ Agent</div>
         </div>
+        <svg id="global-speaker-icon" onclick="toggleSpeechGlobal()" title="Listen to Active Report" style="cursor: pointer; margin-left: auto; margin-right: 4px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
       </div>
       <div class="input-row">
         <textarea id="query-input" class="query-input" placeholder="Message Onyx..." rows="1" oninput="autoResize(this)"></textarea>
@@ -1763,12 +1764,17 @@ function toggleSpeech(runId) {
   }
   
   const icon = document.getElementById('speaker-icon-' + runId);
+  const globalIcon = document.getElementById('global-speaker-icon');
   
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
     if (icon) {
       icon.style.color = 'var(--text-secondary)';
       icon.classList.remove('speaking');
+    }
+    if (globalIcon) {
+      globalIcon.style.color = 'var(--text-secondary)';
+      globalIcon.classList.remove('speaking');
     }
     return;
   }
@@ -1786,14 +1792,30 @@ function toggleSpeech(runId) {
       icon.style.color = 'var(--text-secondary)';
       icon.classList.remove('speaking');
     }
+    if (globalIcon) {
+      globalIcon.style.color = 'var(--text-secondary)';
+      globalIcon.classList.remove('speaking');
+    }
   };
   
   if (icon) {
     icon.style.color = 'var(--brand-primary)';
     icon.classList.add('speaking');
   }
+  if (globalIcon) {
+    globalIcon.style.color = 'var(--brand-primary)';
+    globalIcon.classList.add('speaking');
+  }
   
   window.speechSynthesis.speak(utterance);
+}
+
+function toggleSpeechGlobal() {
+  if (!currentRunId) {
+    alert('No active report to read.');
+    return;
+  }
+  toggleSpeech(currentRunId);
 }
 </script>
 </body>
