@@ -44,7 +44,7 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 		opts.MaxSubQuestions = 6
 	}
 	if opts.MaxReflectionRounds == 0 {
-		opts.MaxReflectionRounds = 2
+		opts.MaxReflectionRounds = 5
 	}
 
 	var runID int64

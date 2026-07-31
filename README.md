@@ -206,6 +206,10 @@ scraperapi_key: "YOUR_SCRAPERAPI_KEY"  # optional, last-resort fallback
 
 Accessible at `http://localhost:9090/ui`. 
 This unified single-page application replaces the older multi-page dashboard. The core interaction allows you to pick a mode (Deep Research or Agent), type a query, watch the execution steps stream in live with collapsible details, and view the final generated markdown report. 
+
+**⚙️ Interactive LLM Configuration**
+The Web UI features a built-in Settings modal that lets you configure your LLM provider (OpenCode Zen, OpenAI, Anthropic, Groq, OpenRouter, etc.), input your API key, and dynamically fetch/select available models without needing to restart the server or manually edit `config.yaml`.
+
 *Note: The UI is built using plain HTML/CSS/JS + Go templates, with no frontend framework or build step required.*
 
 ---

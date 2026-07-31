@@ -135,6 +135,7 @@ func NewStore(dbPath string) (*Store, error) {
 
 	// Auto-migrate schema fixes
 	db.Exec("ALTER TABLE findings ADD COLUMN source_provider TEXT;")
+	db.Exec("ALTER TABLE pages ADD COLUMN source_provider TEXT;")
 
 	return &Store{db: db}, nil
 }

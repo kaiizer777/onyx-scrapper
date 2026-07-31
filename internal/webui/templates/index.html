@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
 <!-- Marked for Markdown rendering -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- html2pdf for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root {
     --bg-base: #06080f;
@@ -624,6 +626,279 @@
     box-shadow: 0 4px 10px rgba(239, 68, 68, 0.3);
   }
   .btn-stop svg { width: 16px; height: 16px; fill: currentColor; }
+
+  /* ── Sidebar footer + Settings button ── */
+  .sidebar-footer {
+    padding: 12px;
+    border-top: 1px solid var(--border-subtle);
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .btn-settings {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-surface-hover);
+    color: var(--text-primary);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--font-sans);
+  }
+  .btn-settings:hover {
+    background: rgba(0, 68, 255, 0.1);
+    border-color: rgba(0, 68, 255, 0.3);
+    color: var(--text-accent);
+  }
+  .btn-settings svg { width: 16px; height: 16px; opacity: 0.85; }
+  .btn-settings .settings-status-dot {
+    margin-left: auto;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-done);
+    box-shadow: 0 0 6px var(--status-done);
+    opacity: 0.9;
+  }
+
+  /* ── Settings modal ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 4, 12, 0.7);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.18s ease-out;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    width: min(620px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    background: linear-gradient(160deg, var(--bg-surface) 0%, #0c111c 100%);
+    border: 1px solid var(--border-lighter);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-accent);
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .modal-title svg { width: 18px; height: 18px; color: var(--brand-primary); }
+  .modal-close {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover { color: var(--text-primary); border-color: var(--border-lighter); }
+
+  .modal-body {
+    padding: 22px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .field-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    opacity: 0.85;
+  }
+  .field input[type="text"],
+  .field input[type="password"],
+  .field select,
+  .field textarea {
+    background: var(--bg-base);
+    border: 1px solid var(--border-lighter);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    border-color: rgba(0, 68, 255, 0.6);
+    box-shadow: 0 0 0 3px rgba(0, 68, 255, 0.15);
+  }
+  .field input[disabled],
+  .field select[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .field-row { display: flex; gap: 10px; align-items: stretch; }
+  .field-row .field { flex: 1; }
+
+  .api-key-row { position: relative; }
+  .api-key-row input { padding-right: 86px; font-family: var(--font-mono); }
+  .api-key-actions {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 4px;
+  }
+  .api-key-actions button {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .api-key-actions button:hover { color: var(--text-primary); border-color: var(--border-lighter); }
+
+  .model-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    background: var(--bg-base);
+    border: 1px solid var(--border-lighter);
+    border-radius: 10px;
+    padding: 6px;
+  }
+  .model-item {
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.15s;
+    font-family: var(--font-mono);
+  }
+  .model-item:hover { background: var(--bg-surface-hover); }
+  .model-item.active {
+    background: var(--brand-tint);
+    border: 1px solid rgba(0, 68, 255, 0.4);
+    color: var(--text-accent);
+  }
+  .model-item .model-tag {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    background: var(--bg-surface-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .model-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 12px;
+  }
+
+  .modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+  .modal-status { font-size: 12px; color: var(--text-secondary); }
+  .modal-status.success { color: var(--status-done); }
+  .modal-status.error { color: var(--status-err); }
+  .btn-primary, .btn-ghost {
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: var(--font-sans);
+    border: 1px solid transparent;
+  }
+  .btn-primary {
+    background: var(--brand-gradient);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-sm);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 18px rgba(0, 68, 255, 0.45); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-subtle);
+  }
+  .btn-ghost:hover { color: var(--text-primary); border-color: var(--border-lighter); }
+
+  .provider-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 68, 255, 0.08);
+    border: 1px solid rgba(0, 68, 255, 0.2);
+    color: var(--text-accent);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .provider-pill::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--brand-primary);
+    box-shadow: 0 0 6px var(--brand-primary);
+  }
 </style>
 </head>
 <body>
@@ -635,6 +910,83 @@
   </div>
   <div class="history-list" id="history-list">
     <!-- History items populated here -->
+  </div>
+  <div class="sidebar-footer">
+    <button class="btn-settings" id="btn-settings" onclick="openSettings()" title="Model provider & API key">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      <span>Settings</span>
+      <span class="settings-status-dot" id="settings-status-dot" title="Provider configured"></span>
+    </button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settings-modal" onclick="if (event.target === this) closeSettings()">
+  <div class="modal" role="dialog" aria-labelledby="settings-title">
+    <div class="modal-header">
+      <div class="modal-title" id="settings-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        Model Provider
+        <span class="provider-pill" id="settings-provider-pill" style="margin-left:6px">—</span>
+      </div>
+      <button class="modal-close" onclick="closeSettings()" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label class="field-label" for="settings-provider">Provider</label>
+        <select id="settings-provider" onchange="onProviderChange()"></select>
+        <div class="field-hint">Pick a preset to auto-fill the base URL and curated model list. Use <em>Custom</em> for any OpenAI-compatible endpoint.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="settings-baseurl">Base URL</label>
+        <input type="text" id="settings-baseurl" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false" />
+        <div class="field-hint">The chat-completions endpoint. Trailing slashes are stripped automatically.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="settings-apikey">API Key</label>
+        <div class="api-key-row">
+          <input type="password" id="settings-apikey" placeholder="sk-..." autocomplete="off" spellcheck="false" />
+          <div class="api-key-actions">
+            <button type="button" onclick="toggleApiKeyVisibility()" id="settings-apikey-toggle">Show</button>
+          </div>
+        </div>
+        <div class="field-hint" id="settings-apikey-hint">Leave blank to keep the currently stored key. Stored in <code>config.yaml</code> on save.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="settings-model">Model</label>
+        <input type="text" id="settings-model" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false" list="settings-model-list" />
+        <datalist id="settings-model-list"></datalist>
+        <div class="field-hint">Click a model below to select it, or type any custom model id. The selector pulls curated presets and the live <code>/models</code> response when reachable.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="settings-max-questions">Deep Research Limit (Steps)</label>
+        <input type="number" id="settings-max-questions" placeholder="6" min="1" max="20" autocomplete="off" />
+        <div class="field-hint">Maximum number of sub-questions to explore during deep research. Default is 6.</div>
+      </div>
+
+      <div class="field">
+        <label class="field-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Available models</span>
+          <button type="button" class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="refreshModelList()">↻ Refresh</button>
+        </label>
+        <div class="model-picker" id="settings-model-picker">
+          <div class="model-empty">Loading model list…</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-status" id="settings-status">—</div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn-ghost" onclick="closeSettings()">Cancel</button>
+        <button class="btn-primary" id="settings-save-btn" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -860,7 +1212,8 @@ async function submitQuery() {
   
   try {
     const endpoint = type === 'agent' ? '/agent/async' : '/deep-research';
-    const bodyPayload = type === 'agent' ? { goal: query } : { query: query };
+    const maxQ = parseInt(localStorage.getItem('maxQuestions') || '6', 10);
+    const bodyPayload = type === 'agent' ? { goal: query } : { query: query, max_questions: maxQ };
     
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -1075,9 +1428,11 @@ function renderThread(data) {
       reportWrap.id = 'report-' + run.id;
       reportWrap.className = 'report-container';
       reportWrap.innerHTML = `
-        <div class="report-header">
+        <div class="report-header" style="display: flex; align-items: center;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Final Report
+          <span style="flex: 1; margin-left: 8px;">Final Report</span>
+          <svg id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report" style="cursor: pointer; margin-left: auto; margin-right: 12px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          <svg onclick="downloadPDF('${run.id}')" title="Download PDF" style="cursor: pointer; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         </div>
         <div class="report-content">${marked.parse(run.report_md)}</div>
       `;
@@ -1136,9 +1491,11 @@ function renderThread(data) {
       reportWrap.id = 'report-' + run.id;
       reportWrap.className = 'report-container';
       reportWrap.innerHTML = `
-        <div class="report-header">
+        <div class="report-header" style="display: flex; align-items: center;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          Final Report
+          <span style="flex: 1; margin-left: 8px;">Final Report</span>
+          <svg id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report" style="cursor: pointer; margin-left: auto; margin-right: 12px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          <svg onclick="downloadPDF('${run.id}')" title="Download PDF" style="cursor: pointer; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
         </div>
         <div class="report-content">${marked.parse(run.result)}</div>
       `;
@@ -1169,6 +1526,274 @@ function escapeHtml(unsafe) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
+}
+
+// ──────────────────────────────────────────────────────────────
+// Settings modal
+// ──────────────────────────────────────────────────────────────
+let settingsState = {
+  provider: 'opencode_zen',
+  baseURL: '',
+  apiKeyMasked: '',
+  apiKeySet: false,
+  model: '',
+  providers: [],
+  models: []
+};
+
+async function openSettings() {
+  document.getElementById('settings-modal').classList.add('show');
+  
+  const storedMax = localStorage.getItem('maxQuestions');
+  if (storedMax) {
+      document.getElementById('settings-max-questions').value = storedMax;
+  }
+
+  await loadSettings();
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.remove('show');
+  // Reset the password field to a clean placeholder so a peeking shoulder
+  // doesn't keep the key visible after close.
+  const apikey = document.getElementById('settings-apikey');
+  if (apikey.type === 'text') {
+    apikey.type = 'password';
+    document.getElementById('settings-apikey-toggle').textContent = 'Show';
+  }
+  apikey.value = '';
+  setSettingsStatus('', '');
+}
+
+async function loadSettings() {
+  setSettingsStatus('Loading…', '');
+  try {
+    const res = await fetch('/ui/settings');
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    settingsState = data;
+
+    const providerSelect = document.getElementById('settings-provider');
+    providerSelect.innerHTML = '';
+    (data.providers || []).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.label;
+      providerSelect.appendChild(opt);
+    });
+    providerSelect.value = data.provider || 'opencode_zen';
+
+    document.getElementById('settings-baseurl').value = data.base_url || '';
+    document.getElementById('settings-model').value = data.model || '';
+
+    const hint = document.getElementById('settings-apikey-hint');
+    if (data.api_key_set) {
+      hint.innerHTML = `Current key: <code>${escapeHtml(data.api_key_masked || '****')}</code> — leave blank to keep it.`;
+    } else {
+      hint.textContent = 'No API key configured. Add one to enable chat.';
+    }
+
+    document.getElementById('settings-provider-pill').textContent =
+      (data.providers.find(p => p.id === data.provider) || {}).label || data.provider || '—';
+
+    renderModelList(data.models || [], data.model);
+    setSettingsStatus('', '');
+  } catch (err) {
+    setSettingsStatus('Failed to load: ' + err.message, 'error');
+  }
+}
+
+function onProviderChange() {
+  const providerId = document.getElementById('settings-provider').value;
+  const preset = (settingsState.providers || []).find(p => p.id === providerId);
+  document.getElementById('settings-provider-pill').textContent = preset ? preset.label : providerId;
+  if (preset && preset.base_url) {
+    document.getElementById('settings-baseurl').value = preset.base_url;
+  }
+  // Show the preset's curated list immediately; user can hit Refresh to
+  // attempt a live /models call once base_url + key are set.
+  renderModelList(preset ? preset.models : [], document.getElementById('settings-model').value);
+}
+
+function renderModelList(models, selectedModel) {
+  const picker = document.getElementById('settings-model-picker');
+  const datalist = document.getElementById('settings-model-list');
+  datalist.innerHTML = '';
+  picker.innerHTML = '';
+
+  if (!models || models.length === 0) {
+    picker.innerHTML = '<div class="model-empty">No models available. Save a provider + API key, then click Refresh.</div>';
+    return;
+  }
+
+  models.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    datalist.appendChild(opt);
+
+    const item = document.createElement('div');
+    item.className = 'model-item' + (m === selectedModel ? ' active' : '');
+    item.innerHTML = `<span>${escapeHtml(m)}</span>` + (m === selectedModel ? '<span class="model-tag">current</span>' : '');
+    item.onclick = () => {
+      document.getElementById('settings-model').value = m;
+      document.querySelectorAll('.model-item').forEach(el => el.classList.remove('active'));
+      item.classList.add('active');
+      const tag = document.createElement('span');
+      tag.className = 'model-tag';
+      tag.textContent = 'current';
+      item.appendChild(tag);
+    };
+    picker.appendChild(item);
+  });
+}
+
+async function refreshModelList() {
+  const provider = document.getElementById('settings-provider').value;
+  const baseURL = document.getElementById('settings-baseurl').value.trim();
+  const apiKey = document.getElementById('settings-apikey').value.trim();
+  setSettingsStatus('Fetching models…', '');
+
+  const params = new URLSearchParams({ provider });
+  if (baseURL) params.set('base_url', baseURL);
+  if (apiKey) params.set('api_key', apiKey);
+
+  try {
+    const res = await fetch('/ui/models?' + params.toString());
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    settingsState.models = data.models || [];
+    renderModelList(settingsState.models, document.getElementById('settings-model').value);
+    setSettingsStatus(`Loaded ${settingsState.models.length} model(s).`, 'success');
+  } catch (err) {
+    setSettingsStatus('Model fetch failed: ' + err.message, 'error');
+  }
+}
+
+function toggleApiKeyVisibility() {
+  const input = document.getElementById('settings-apikey');
+  const btn = document.getElementById('settings-apikey-toggle');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = 'Hide';
+  } else {
+    input.type = 'password';
+    btn.textContent = 'Show';
+  }
+}
+
+async function saveSettings() {
+  const provider = document.getElementById('settings-provider').value;
+  const baseURL = document.getElementById('settings-baseurl').value.trim();
+  const apiKey = document.getElementById('settings-apikey').value.trim();
+  const model = document.getElementById('settings-model').value.trim();
+  const maxQuestions = document.getElementById('settings-max-questions').value.trim();
+
+  if (maxQuestions) {
+    localStorage.setItem('maxQuestions', maxQuestions);
+  } else {
+    localStorage.removeItem('maxQuestions');
+  }
+
+  if (!baseURL) return setSettingsStatus('Base URL is required.', 'error');
+  if (!model) return setSettingsStatus('Model is required.', 'error');
+
+  const btn = document.getElementById('settings-save-btn');
+  btn.disabled = true;
+  setSettingsStatus('Saving…', '');
+  try {
+    const res = await fetch('/ui/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, base_url: baseURL, api_key: apiKey, model })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    setSettingsStatus(`Saved — using ${data.model} on ${data.base_url}.`, 'success');
+
+    // Update the status dot in the sidebar to reflect "configured" state.
+    const dot = document.getElementById('settings-status-dot');
+    if (dot) dot.style.opacity = '1';
+
+    // Refresh the list (POST returns the merged model list with live /models if reachable).
+    if (Array.isArray(data.available_models)) {
+      settingsState.models = data.available_models;
+      renderModelList(settingsState.models, data.model);
+    }
+  } catch (err) {
+    setSettingsStatus('Save failed: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function setSettingsStatus(text, kind) {
+  const el = document.getElementById('settings-status');
+  el.textContent = text;
+  el.className = 'modal-status' + (kind ? ' ' + kind : '');
+}
+
+// Esc closes the modal.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('settings-modal').classList.contains('show')) {
+    closeSettings();
+  }
+});
+
+function downloadPDF(runId) {
+  const element = document.getElementById('report-' + runId);
+  if (!element) return;
+  const reportContent = element.querySelector('.report-content');
+  if (!reportContent) return;
+  
+  const opt = {
+    margin:       10,
+    filename:     'Final_Report_' + runId + '.pdf',
+    image:        { type: 'jpeg', quality: 0.98 },
+    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+  
+  html2pdf().set(opt).from(reportContent).save();
+}
+
+function toggleSpeech(runId) {
+  if (!('speechSynthesis' in window)) {
+    alert('Text-to-Speech is not supported in your browser.');
+    return;
+  }
+  
+  const icon = document.getElementById('speaker-icon-' + runId);
+  
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    if (icon) {
+      icon.style.color = 'var(--text-secondary)';
+      icon.classList.remove('speaking');
+    }
+    return;
+  }
+  
+  const element = document.getElementById('report-' + runId);
+  if (!element) return;
+  const reportContent = element.querySelector('.report-content');
+  if (!reportContent) return;
+  
+  const text = reportContent.innerText;
+  const utterance = new SpeechSynthesisUtterance(text);
+  
+  utterance.onend = function() {
+    if (icon) {
+      icon.style.color = 'var(--text-secondary)';
+      icon.classList.remove('speaking');
+    }
+  };
+  
+  if (icon) {
+    icon.style.color = 'var(--brand-primary)';
+    icon.classList.add('speaking');
+  }
+  
+  window.speechSynthesis.speak(utterance);
 }
 </script>
 </body>

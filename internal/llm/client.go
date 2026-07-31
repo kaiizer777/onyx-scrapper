@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/config"
@@ -38,10 +39,62 @@ type chatCompletionResponse struct {
 }
 
 type Client struct {
+	mu      sync.RWMutex
 	baseURL string
 	apiKey  string
 	model   string
 	hc      *http.Client
+}
+
+// SetBaseURL safely updates the base URL used for chat completion requests.
+func (c *Client) SetBaseURL(baseURL string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.baseURL = strings.TrimSuffix(baseURL, "/")
+}
+
+// SetAPIKey safely updates the bearer token used for chat completion requests.
+func (c *Client) SetAPIKey(apiKey string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.apiKey = apiKey
+}
+
+// SetModel safely updates the model identifier used for chat completion requests.
+func (c *Client) SetModel(model string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.model = model
+}
+
+// Snapshot returns the current base URL, model, and a masked API key for display
+// purposes. The API key is masked to first 4 + last 4 characters; if the key is
+// shorter than 8 characters, only the first 2 characters are shown.
+func (c *Client) Snapshot() (baseURL, model, maskedKey string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.baseURL, c.model, maskAPIKey(c.apiKey)
+}
+
+// RawAPIKey returns the unmasked API key. Use this only when persisting the key
+// to config or making an authenticated call (e.g. listing models).
+func (c *Client) RawAPIKey() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.apiKey
+}
+
+func maskAPIKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		if len(key) <= 2 {
+			return "**"
+		}
+		return key[:2] + strings.Repeat("*", len(key)-2)
+	}
+	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
 }
 
 func NewClient(cfg config.OpenCodeZenConfig) *Client {
@@ -53,7 +106,7 @@ func NewClient(cfg config.OpenCodeZenConfig) *Client {
 		baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
 		apiKey:  cfg.APIKey,
 		model:   model,
-		hc:      &http.Client{Timeout: 60 * time.Second},
+		hc:      &http.Client{Timeout: 10 * time.Minute},
 	}
 }
 
@@ -66,10 +119,16 @@ func NewClientFromConfigPath(path string) (*Client, error) {
 }
 
 func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
-	url := fmt.Sprintf("%s/chat/completions", c.baseURL)
+	c.mu.RLock()
+	baseURL := c.baseURL
+	apiKey := c.apiKey
+	model := c.model
+	c.mu.RUnlock()
+
+	url := fmt.Sprintf("%s/chat/completions", baseURL)
 
 	reqBody := chatCompletionRequest{
-		Model:    c.model,
+		Model:    model,
 		Messages: messages,
 	}
 
@@ -89,7 +148,7 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiKey))
+		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", apiKey))
 
 		resp, reqErr := c.hc.Do(req)
 

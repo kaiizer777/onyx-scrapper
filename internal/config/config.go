@@ -65,3 +65,59 @@ func LoadConfig(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// SaveConfig writes the configuration back to disk in stable key order so
+// the resulting file is friendly to diffs and to the eye. Existing keys that
+// are zero-valued in the supplied Config are preserved from disk.
+func SaveConfig(path string, cfg *Config) error {
+	merged := cfg
+	if existing, err := LoadConfig(path); err == nil && existing != nil {
+		merged = mergeConfig(existing, cfg)
+	}
+	if merged == nil {
+		return fmt.Errorf("no config to save")
+	}
+
+	data, err := yaml.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("marshal config yaml: %w", err)
+	}
+
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return fmt.Errorf("write temp config: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename config: %w", err)
+	}
+	return nil
+}
+
+func mergeConfig(existing, incoming *Config) *Config {
+	merged := *existing
+
+	if incoming != nil {
+		if incoming.OpenCodeZen.BaseURL != "" {
+			merged.OpenCodeZen.BaseURL = incoming.OpenCodeZen.BaseURL
+		}
+		if incoming.OpenCodeZen.APIKey != "" {
+			merged.OpenCodeZen.APIKey = incoming.OpenCodeZen.APIKey
+		}
+		if incoming.OpenCodeZen.DefaultModel != "" {
+			merged.OpenCodeZen.DefaultModel = incoming.OpenCodeZen.DefaultModel
+		}
+		if incoming.ScraperAPIKey != "" {
+			merged.ScraperAPIKey = incoming.ScraperAPIKey
+		}
+		if incoming.TinyFish != nil {
+			merged.TinyFish = incoming.TinyFish
+		}
+		if incoming.Jina != nil {
+			merged.Jina = incoming.Jina
+		}
+		if incoming.Discovery != nil {
+			merged.Discovery = incoming.Discovery
+		}
+	}
+	return &merged
+}
+

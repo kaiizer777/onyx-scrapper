@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	DefaultMaxSteps = 15
+	DefaultMaxSteps = 35
 	MaxSnippetLen   = 3000
 )
 
@@ -193,7 +193,7 @@ Available actions and arguments:
 4. click: {"selector": "#id or .class", "description": "optional description if selector unknown"} - Clicks element.
 5. type: {"selector": "#id or .class", "description": "optional description", "text": "text to type", "press_enter": true|false} - Inputs text into field.
 6. extract: {"schema": "product|article|event|search-result-list or custom JSON schema"} - Extracts structured JSON from page.
-7. done: {"result": "Final summary answer or extracted data"} - Completes execution.`
+7. done: {"result": "The FULL comprehensive final report. You MUST include all actual data, facts, and extracted JSON that fulfills the goal here. DO NOT just output a confirmation."} - Completes execution.`
 	
 	if a.subQuestionID > 0 {
 		systemPrompt += `
@@ -205,7 +205,8 @@ Available actions and arguments:
 Rules:
 - Respond strictly with valid JSON. No markdown code blocks surrounding the JSON unless required, but prefer raw JSON string.
 - Execute actions one step at a time.
-- If an action fails, use alternative strategies.`
+- If an action fails, use alternative strategies.
+- When calling 'done', the 'result' field MUST contain the actual complete data or report requested by the goal, never just a summary of your steps.`
 
 	messages := []llm.Message{
 		{Role: "system", Content: systemPrompt},
