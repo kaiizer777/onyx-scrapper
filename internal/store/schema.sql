@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS pages (
     fetched_at DATETIME,
     raw_html TEXT,
     clean_text TEXT,
-    source_provider TEXT
+    source_provider TEXT,
+    fetch_integrity TEXT NOT NULL DEFAULT 'ok'
 );
 
 CREATE TABLE IF NOT EXISTS extractions (
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS agent_steps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id INTEGER,
     step_number INTEGER,
+    step_kind TEXT,
     action TEXT,
     args_json TEXT,
     result TEXT,
@@ -75,6 +77,13 @@ CREATE TABLE IF NOT EXISTS research_subquestions (
     FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS run_pages (
+    run_id INTEGER,
+    url TEXT,
+    FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE,
+    UNIQUE(run_id, url)
+);
+
 CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subquestion_id INTEGER,
@@ -84,4 +93,13 @@ CREATE TABLE IF NOT EXISTS findings (
     confidence REAL,
     created_at DATETIME,
     FOREIGN KEY(subquestion_id) REFERENCES research_subquestions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS entity_cache (
+    entity TEXT,
+    version_token TEXT,
+    result TEXT,
+    value TEXT,
+    created_at DATETIME,
+    UNIQUE(entity, version_token)
 );

@@ -267,7 +267,7 @@ func (s *Server) handleFetch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.store != nil {
-		if _, saveErr := s.store.SavePage(targetURL, rawHTML, cleanText, "api"); saveErr != nil {
+		if _, saveErr := s.store.SavePage(targetURL, rawHTML, cleanText, "api", "ok"); saveErr != nil {
 			slog.Warn("Failed to save fetched page to store", "url", targetURL, "error", saveErr)
 		}
 	}
@@ -333,7 +333,7 @@ func (s *Server) handleExtract(w http.ResponseWriter, r *http.Request) {
 
 	if s.store != nil {
 		cleanText, _ := extract.CleanHTML(rawHTML)
-		if pageID, saveErr := s.store.SavePage(req.URL, rawHTML, cleanText, "api"); saveErr == nil {
+		if pageID, saveErr := s.store.SavePage(req.URL, rawHTML, cleanText, "api", "ok"); saveErr == nil {
 			_, _ = s.store.SaveExtraction(pageID, req.Schema, string(rawJSON))
 		}
 	}
@@ -668,7 +668,7 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orchestrator := research.NewOrchestrator(s.client, s.store, s.registry)
+	orchestrator := research.NewOrchestrator(s.client, s.store, s.registry, nil)
 	
 	// Create run ID
 	runID, err := s.store.CreateResearchRun(req.Query)

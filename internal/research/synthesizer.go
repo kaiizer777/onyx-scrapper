@@ -6,19 +6,21 @@ import (
 	"strings"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 type Synthesizer struct {
-	client *llm.Client
+	client      *llm.Client
+	authManager *quality.AuthorityManager
 }
 
-func NewSynthesizer(client *llm.Client) *Synthesizer {
-	return &Synthesizer{client: client}
+func NewSynthesizer(client *llm.Client, authManager *quality.AuthorityManager) *Synthesizer {
+	return &Synthesizer{client: client, authManager: authManager}
 }
 
 func (s *Synthesizer) Synthesize(ctx context.Context, plan ResearchPlan, findings []store.Finding) (string, error) {
-	findingsText := buildFindingsText(findings)
+	findingsText := buildFindingsText(findings, s.authManager)
 	outlineText := strings.Join(plan.ReportOutline, "\n- ")
 
 	prompt := fmt.Sprintf(`You are the lead synthesizer for a research report.

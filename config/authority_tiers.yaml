@@ -1,0 +1,31 @@
+primary:
+  - ".gov"
+  - ".edu"
+  - ".mil"
+  - "github.com"
+  - "arxiv.org"
+  - "nature.com"
+  - "science.org"
+  - "ieee.org"
+  - "reuters.com"
+  - "apnews.com"
+
+established:
+  - "techcrunch.com"
+  - "theverge.com"
+  - "wired.com"
+  - "wsj.com"
+  - "nytimes.com"
+  - "bloomberg.com"
+  - "ft.com"
+  - "forbes.com"
+  - "ycombinator.com"
+  - "stackoverflow.com"
+  - "medium.com"
+  - "towardsdatascience.com"
+  - "huggingface.co"
+
+general:
+  - "reddit.com"
+  - "quora.com"
+  - "hackernoon.com"

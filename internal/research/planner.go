@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
@@ -24,11 +25,12 @@ type ResearchPlan struct {
 }
 
 type Planner struct {
-	client *llm.Client
+	client      *llm.Client
+	authManager *quality.AuthorityManager
 }
 
-func NewPlanner(client *llm.Client) *Planner {
-	return &Planner{client: client}
+func NewPlanner(client *llm.Client, authManager *quality.AuthorityManager) *Planner {
+	return &Planner{client: client, authManager: authManager}
 }
 
 type planResponse struct {
@@ -87,7 +89,7 @@ type reflectionResponse struct {
 }
 
 func (p *Planner) ReflectAndReplan(ctx context.Context, plan ResearchPlan, allFindings []store.Finding) ([]string, error) {
-	findingsText := buildFindingsText(allFindings)
+	findingsText := buildFindingsText(allFindings, p.authManager)
 
 	prompt := fmt.Sprintf(`You are reviewing the findings for the research goal:
 "%s"
@@ -128,13 +130,24 @@ Respond ONLY with a JSON object in the following format:
 	return rr.NewQuestions, nil
 }
 
-func buildFindingsText(findings []store.Finding) string {
+func buildFindingsText(findings []store.Finding, authManager *quality.AuthorityManager) string {
+	if len(findings) == 0 {
+		return "No findings yet."
+	}
+	
+	if authManager != nil {
+		engine := quality.NewCorroborationEngine(authManager)
+		formattedFindings := engine.GroupAndLabelFindings(findings)
+		var sb strings.Builder
+		for i, f := range formattedFindings {
+			sb.WriteString(fmt.Sprintf("%d. %s\n", i+1, f))
+		}
+		return sb.String()
+	}
+
 	var sb strings.Builder
 	for i, f := range findings {
 		sb.WriteString(fmt.Sprintf("%d. [%s] %s\n", i+1, f.SourceURL, f.Claim))
-	}
-	if sb.Len() == 0 {
-		return "No findings yet."
 	}
 	return sb.String()
 }

@@ -20,7 +20,7 @@ func TestStore(t *testing.T) {
 	rawHTML := "<html><body><h1>Go Programming Language</h1><p>Go is an open source programming language.</p></body></html>"
 	cleanText := "Go Programming Language\nGo is an open source programming language."
 
-	pageID, err := st.SavePage(url, rawHTML, cleanText, "test-source")
+	pageID, err := st.SavePage(url, rawHTML, cleanText, "test-source", "ok")
 	if err != nil {
 		t.Fatalf("SavePage failed: %v", err)
 	}
@@ -48,7 +48,7 @@ func TestStore(t *testing.T) {
 
 	// 4. Upsert Page (Update)
 	updatedText := "Go Programming Language\nUpdated text for search index."
-	updatedPageID, err := st.SavePage(url, rawHTML, updatedText, "test-source")
+	updatedPageID, err := st.SavePage(url, rawHTML, updatedText, "test-source", "ok")
 	if err != nil {
 		t.Fatalf("SavePage upsert failed: %v", err)
 	}

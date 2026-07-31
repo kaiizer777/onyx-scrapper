@@ -20,6 +20,7 @@ import (
 	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
+	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 )
 
 const (
@@ -408,11 +409,17 @@ func (a *Agent) execNavigate(ctx context.Context, page *rod.Page, targetURL stri
 		cleanText = rawHTML
 	}
 
+	integrity := quality.AnalyzeFetchIntegrity(rawHTML, cleanText, "rod", nil)
+
 	// Persist page in database
-	if pageID, err := a.store.SavePage(targetURL, rawHTML, cleanText, "rod"); err != nil {
+	if pageID, err := a.store.SavePage(targetURL, rawHTML, cleanText, "rod", string(integrity)); err != nil {
 		slog.Warn("Failed to save page to store", "url", targetURL, "error", err)
 	} else {
 		slog.Debug("Saved page to store", "url", targetURL, "page_id", pageID)
+	}
+
+	if integrity != quality.FetchOK && integrity != quality.FetchFallbackRecovered && integrity != quality.FetchPartial {
+		return fmt.Sprintf("[FETCH_INTEGRITY: %s — this source produced no usable content, do not treat as read, consider an alternate source or query reformulation]", integrity), nil
 	}
 
 	snippet := cleanText

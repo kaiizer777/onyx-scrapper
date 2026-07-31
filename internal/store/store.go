@@ -16,12 +16,13 @@ import (
 var schemaSQL string
 
 type Page struct {
-	ID        int64     `json:"id"`
-	URL       string    `json:"url"`
-	FetchedAt time.Time `json:"fetched_at"`
+	ID             int64     `json:"id"`
+	URL            string    `json:"url"`
+	FetchedAt      time.Time `json:"fetched_at"`
 	RawHTML        string    `json:"raw_html"`
 	CleanText      string    `json:"clean_text"`
 	SourceProvider string    `json:"source_provider"`
+	FetchIntegrity string    `json:"fetch_integrity"`
 }
 
 type Extraction struct {
@@ -136,6 +137,8 @@ func NewStore(dbPath string) (*Store, error) {
 	// Auto-migrate schema fixes
 	db.Exec("ALTER TABLE findings ADD COLUMN source_provider TEXT;")
 	db.Exec("ALTER TABLE pages ADD COLUMN source_provider TEXT;")
+	db.Exec("ALTER TABLE pages ADD COLUMN fetch_integrity TEXT NOT NULL DEFAULT 'ok';")
+	db.Exec("CREATE TABLE IF NOT EXISTS run_pages (run_id INTEGER, url TEXT, FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE, UNIQUE(run_id, url));")
 
 	return &Store{db: db}, nil
 }
@@ -149,25 +152,26 @@ func (s *Store) Close() error {
 }
 
 // SavePage inserts or updates a page record by URL and returns its database ID.
-func (s *Store) SavePage(url, rawHTML, cleanText, sourceProvider string) (int64, error) {
+func (s *Store) SavePage(url, rawHTML, cleanText, sourceProvider string, fetchIntegrity string) (int64, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
 	now := time.Now().UTC()
 
 	query := `
-		INSERT INTO pages (url, fetched_at, raw_html, clean_text, source_provider)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO pages (url, fetched_at, raw_html, clean_text, source_provider, fetch_integrity)
+		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT(url) DO UPDATE SET
 			fetched_at = excluded.fetched_at,
 			raw_html = excluded.raw_html,
 			clean_text = excluded.clean_text,
-			source_provider = excluded.source_provider
+			source_provider = excluded.source_provider,
+			fetch_integrity = excluded.fetch_integrity
 		RETURNING id;
 	`
 
 	var pageID int64
-	err := s.db.QueryRow(query, url, now, rawHTML, cleanText, sourceProvider).Scan(&pageID)
+	err := s.db.QueryRow(query, url, now, rawHTML, cleanText, sourceProvider, fetchIntegrity).Scan(&pageID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to save page (%s): %w", url, err)
 	}
@@ -177,11 +181,11 @@ func (s *Store) SavePage(url, rawHTML, cleanText, sourceProvider string) (int64,
 
 // GetPageByURL retrieves a saved page by its exact URL.
 func (s *Store) GetPageByURL(url string) (*Page, error) {
-	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider FROM pages WHERE url = ?`
+	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider, fetch_integrity FROM pages WHERE url = ?`
 	row := s.db.QueryRow(query, url)
 
 	var p Page
-	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider)
+	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider, &p.FetchIntegrity)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -194,11 +198,11 @@ func (s *Store) GetPageByURL(url string) (*Page, error) {
 
 // GetPageByID retrieves a saved page by its database ID.
 func (s *Store) GetPageByID(id int64) (*Page, error) {
-	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider FROM pages WHERE id = ?`
+	query := `SELECT id, url, fetched_at, raw_html, clean_text, source_provider, fetch_integrity FROM pages WHERE id = ?`
 	row := s.db.QueryRow(query, id)
 
 	var p Page
-	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider)
+	err := row.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider, &p.FetchIntegrity)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -212,7 +216,7 @@ func (s *Store) GetPageByID(id int64) (*Page, error) {
 // GetRecentPages retrieves recent scraped pages.
 func (s *Store) GetRecentPages(limit, offset int) ([]Page, error) {
 	query := `
-		SELECT id, url, fetched_at, raw_html, clean_text, source_provider 
+		SELECT id, url, fetched_at, raw_html, clean_text, source_provider, fetch_integrity 
 		FROM pages 
 		ORDER BY fetched_at DESC 
 		LIMIT ? OFFSET ?
@@ -226,7 +230,7 @@ func (s *Store) GetRecentPages(limit, offset int) ([]Page, error) {
 	var pages []Page
 	for rows.Next() {
 		var p Page
-		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider); err != nil {
+		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider, &p.FetchIntegrity); err != nil {
 			return nil, fmt.Errorf("failed to scan page: %w", err)
 		}
 		pages = append(pages, p)
@@ -449,6 +453,40 @@ func (s *Store) GetAgentRuns(limit int) ([]AgentRun, error) {
 	return runs, nil
 }
 
+// AddPageToRun associates a fetched page with a research run.
+func (s *Store) AddPageToRun(runID int64, url string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	_, err := s.db.Exec(`INSERT OR IGNORE INTO run_pages (run_id, url) VALUES (?, ?)`, runID, url)
+	return err
+}
+
+// GetPagesForRun retrieves all unique pages fetched during a research run.
+func (s *Store) GetPagesForRun(runID int64) ([]Page, error) {
+	query := `
+		SELECT p.id, p.url, p.fetched_at, p.raw_html, p.clean_text, p.source_provider, p.fetch_integrity
+		FROM pages p
+		JOIN run_pages rp ON p.url = rp.url
+		WHERE rp.run_id = ?
+	`
+	rows, err := s.db.Query(query, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query run pages: %w", err)
+	}
+	defer rows.Close()
+
+	var pages []Page
+	for rows.Next() {
+		var p Page
+		if err := rows.Scan(&p.ID, &p.URL, &p.FetchedAt, &p.RawHTML, &p.CleanText, &p.SourceProvider, &p.FetchIntegrity); err != nil {
+			return nil, fmt.Errorf("failed to scan page: %w", err)
+		}
+		pages = append(pages, p)
+	}
+	return pages, nil
+}
+
 // CreateResearchRun starts a new research run.
 func (s *Store) CreateResearchRun(goal string) (int64, error) {
 	now := time.Now().UTC()
@@ -662,4 +700,33 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 		return nil, fmt.Errorf("error iterating merged history: %w", err)
 	}
 	return history, nil
+}
+
+// GetEntityCache retrieves the verified result from cache if it's within TTL.
+func (s *Store) GetEntityCache(entity, token string, ttlHours int) (string, string, bool) {
+	if ttlHours <= 0 {
+		ttlHours = 24
+	}
+	query := `SELECT result, value, created_at FROM entity_cache WHERE entity = ? AND version_token = ?`
+	row := s.db.QueryRow(query, entity, token)
+	var result, value string
+	var createdAt time.Time
+	if err := row.Scan(&result, &value, &createdAt); err != nil {
+		return "", "", false
+	}
+	if time.Since(createdAt).Hours() > float64(ttlHours) {
+		return "", "", false // expired
+	}
+	return result, value, true
+}
+
+// SaveEntityCache saves the verified result to cache.
+func (s *Store) SaveEntityCache(entity, token, result, value string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	now := time.Now().UTC()
+	query := `INSERT INTO entity_cache (entity, version_token, result, value, created_at) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(entity, version_token) DO UPDATE SET result=excluded.result, value=excluded.value, created_at=excluded.created_at;`
+	_, err := s.db.Exec(query, entity, token, result, value, now)
+	return err
 }

@@ -1,0 +1,54 @@
+[
+    {
+        "claim": "Claude 3.5 is the latest version of Anthropic's model.",
+        "should_trigger": true
+    },
+    {
+        "claim": "OpenAI announced GPT-5 yesterday.",
+        "should_trigger": true
+    },
+    {
+        "claim": "The current Apple M4 chip is very fast.",
+        "should_trigger": true
+    },
+    {
+        "claim": "As of 2024, the best framework is React.",
+        "should_trigger": true
+    },
+    {
+        "claim": "The CEO of Acme Corp announced a new product.",
+        "should_trigger": true
+    },
+    {
+        "claim": "Satya Nadella is Microsoft's CEO.",
+        "should_trigger": true
+    },
+    {
+        "claim": "The current price is $1000.",
+        "should_trigger": true
+    },
+    {
+        "claim": "Nvidia's RTX 5090 is the newest card.",
+        "should_trigger": true
+    },
+    {
+        "claim": "This is a generic claim about how algorithms work.",
+        "should_trigger": false
+    },
+    {
+        "claim": "Apples and oranges are fruits.",
+        "should_trigger": false
+    },
+    {
+        "claim": "The sky is blue most of the time.",
+        "should_trigger": false
+    },
+    {
+        "claim": "Water freezes at 0 degrees Celsius.",
+        "should_trigger": false
+    },
+    {
+        "claim": "The quick brown fox jumps over the lazy dog.",
+        "should_trigger": false
+    }
+]

@@ -8,8 +8,11 @@ import (
 	"sync"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/config"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
+	"github.com/kaiizer777/onyx-scrapper/internal/quality"
+	reportpkg "github.com/kaiizer777/onyx-scrapper/internal/report"
 )
 
 type Options struct {
@@ -26,16 +29,48 @@ type Orchestrator struct {
 	planner     *Planner
 	worker      *Worker
 	synthesizer *Synthesizer
+	authManager *quality.AuthorityManager
+	budget      *quality.Budget
 }
 
-func NewOrchestrator(client *llm.Client, st *store.Store, registry *discoverypkg.Registry) *Orchestrator {
+func NewOrchestrator(client *llm.Client, st *store.Store, registry *discoverypkg.Registry, cfg *config.Config) *Orchestrator {
+	entityCheckEnabled := true
+	ttlHours := 24
+	maxExtraCalls := 40
+	if cfg != nil && cfg.Quality != nil {
+		if cfg.Quality.EntityFreshness.Enabled != nil {
+			entityCheckEnabled = *cfg.Quality.EntityFreshness.Enabled
+		}
+		if cfg.Quality.EntityFreshness.CacheTTLHours > 0 {
+			ttlHours = cfg.Quality.EntityFreshness.CacheTTLHours
+		}
+		if cfg.Quality.MaxExtraCallsPerRun > 0 {
+			maxExtraCalls = cfg.Quality.MaxExtraCallsPerRun
+		}
+	}
+	budget := quality.NewBudget(maxExtraCalls)
+
+	var authManager *quality.AuthorityManager
+	if cfg != nil && cfg.Quality != nil && (cfg.Quality.SourceAuthority.Enabled == nil || *cfg.Quality.SourceAuthority.Enabled) {
+		authManager = quality.NewAuthorityManager()
+		tiersPath := cfg.Quality.SourceAuthority.TiersConfigPath
+		if tiersPath == "" {
+			tiersPath = "config/authority_tiers.yaml"
+		}
+		if err := authManager.LoadTiers(tiersPath); err != nil {
+			slog.Warn("Failed to load authority tiers, using default/unknown tiers", "error", err)
+		}
+	}
+
 	return &Orchestrator{
 		client:      client,
 		store:       st,
 		registry:    registry,
-		planner:     NewPlanner(client),
-		worker:      NewWorker(client, st, registry),
-		synthesizer: NewSynthesizer(client),
+		planner:     NewPlanner(client, authManager),
+		worker:      NewWorker(client, st, registry, entityCheckEnabled, budget, ttlHours),
+		synthesizer: NewSynthesizer(client, authManager),
+		authManager: authManager,
+		budget:      budget,
 	}
 }
 
@@ -171,6 +206,10 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 		return nil, fmt.Errorf("synthesis failed: %w", err)
 	}
 
+	runPages, _ := o.store.GetPagesForRun(runID)
+	dbSqs, _ := o.store.GetSubQuestionsForRun(runID)
+	report = reportpkg.RenderReport(report, dbSqs, runPages, o.authManager)
+
 	_ = o.store.UpdateResearchRunStatus(runID, "completed", report)
 	return o.store.GetResearchRun(runID)
 }
@@ -203,4 +242,9 @@ func (o *Orchestrator) executeParallelResearch(ctx context.Context, runID int64,
 	}
 
 	wg.Wait()
+}
+
+// GetQualityBudget returns the budget governor used for this run.
+func (o *Orchestrator) GetQualityBudget() *quality.Budget {
+	return o.budget
 }

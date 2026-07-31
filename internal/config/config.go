@@ -28,12 +28,38 @@ type DiscoveryConfig struct {
 	FetchPriority []string `yaml:"fetch_priority"`
 }
 
+type QualityEntityFreshnessConfig struct {
+	Enabled               *bool    `yaml:"enabled,omitempty"`
+	MaxLookupsPerRun      int      `yaml:"max_lookups_per_run,omitempty"`
+	SecondSourceProviders []string `yaml:"second_source_providers,omitempty"`
+	CacheTTLHours         int      `yaml:"cache_ttl_hours,omitempty"`
+}
+
+type QualityFetchIntegrityConfig struct {
+	Enabled                 *bool `yaml:"enabled,omitempty"`
+	AllowQueryReformulation *bool `yaml:"allow_query_reformulation,omitempty"`
+}
+
+type QualitySourceAuthorityConfig struct {
+	Enabled         *bool  `yaml:"enabled,omitempty"`
+	TiersConfigPath string `yaml:"tiers_config_path,omitempty"`
+}
+
+type QualityConfig struct {
+	Enabled             *bool                        `yaml:"enabled,omitempty"`
+	MaxExtraCallsPerRun int                          `yaml:"max_extra_calls_per_run,omitempty"`
+	EntityFreshness     QualityEntityFreshnessConfig `yaml:"entity_freshness,omitempty"`
+	FetchIntegrity      QualityFetchIntegrityConfig  `yaml:"fetch_integrity,omitempty"`
+	SourceAuthority     QualitySourceAuthorityConfig `yaml:"source_authority,omitempty"`
+}
+
 type Config struct {
 	OpenCodeZen   OpenCodeZenConfig `yaml:"opencode_zen"`
 	ScraperAPIKey string            `yaml:"scraperapi_key"`
 	TinyFish      *TinyFishConfig   `yaml:"tinyfish,omitempty"`
 	Jina          *JinaConfig       `yaml:"jina,omitempty"`
 	Discovery     *DiscoveryConfig  `yaml:"discovery,omitempty"`
+	Quality       *QualityConfig    `yaml:"quality,omitempty"`
 }
 
 // GetScraperAPIKey returns the ScraperAPI key from env var SCRAPERAPI_KEY or config file.
@@ -116,6 +142,42 @@ func mergeConfig(existing, incoming *Config) *Config {
 		}
 		if incoming.Discovery != nil {
 			merged.Discovery = incoming.Discovery
+		}
+		if incoming.Quality != nil {
+			if merged.Quality == nil {
+				merged.Quality = incoming.Quality
+			} else {
+				if incoming.Quality.Enabled != nil {
+					merged.Quality.Enabled = incoming.Quality.Enabled
+				}
+				if incoming.Quality.MaxExtraCallsPerRun != 0 {
+					merged.Quality.MaxExtraCallsPerRun = incoming.Quality.MaxExtraCallsPerRun
+				}
+				if incoming.Quality.EntityFreshness.Enabled != nil {
+					merged.Quality.EntityFreshness.Enabled = incoming.Quality.EntityFreshness.Enabled
+				}
+				if incoming.Quality.EntityFreshness.MaxLookupsPerRun != 0 {
+					merged.Quality.EntityFreshness.MaxLookupsPerRun = incoming.Quality.EntityFreshness.MaxLookupsPerRun
+				}
+				if len(incoming.Quality.EntityFreshness.SecondSourceProviders) > 0 {
+					merged.Quality.EntityFreshness.SecondSourceProviders = incoming.Quality.EntityFreshness.SecondSourceProviders
+				}
+				if incoming.Quality.EntityFreshness.CacheTTLHours != 0 {
+					merged.Quality.EntityFreshness.CacheTTLHours = incoming.Quality.EntityFreshness.CacheTTLHours
+				}
+				if incoming.Quality.FetchIntegrity.Enabled != nil {
+					merged.Quality.FetchIntegrity.Enabled = incoming.Quality.FetchIntegrity.Enabled
+				}
+				if incoming.Quality.FetchIntegrity.AllowQueryReformulation != nil {
+					merged.Quality.FetchIntegrity.AllowQueryReformulation = incoming.Quality.FetchIntegrity.AllowQueryReformulation
+				}
+				if incoming.Quality.SourceAuthority.Enabled != nil {
+					merged.Quality.SourceAuthority.Enabled = incoming.Quality.SourceAuthority.Enabled
+				}
+				if incoming.Quality.SourceAuthority.TiersConfigPath != "" {
+					merged.Quality.SourceAuthority.TiersConfigPath = incoming.Quality.SourceAuthority.TiersConfigPath
+				}
+			}
 		}
 	}
 	return &merged
