@@ -1,0 +1,3 @@
+time=2026-07-31T22:30:45.695+05:30 level=INFO msg="Starting Onyx Scrapper HTTP API Server" port=9090 url=http://localhost:9090
+time=2026-07-31T22:30:45.696+05:30 level=INFO msg="Onyx API Server starting" port=9090 url=http://localhost:9090
+time=2026-07-31T22:30:45.699+05:30 level=ERROR msg="API Server failure" error="listen tcp :9090: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted."
