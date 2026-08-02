@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Onyx — News Mode Profile</title>
+<title>Onyx — Profile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
@@ -450,7 +450,7 @@
     </a>
     <a href="/ui/profile" class="nav-item active">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-      <span>News Profile</span>
+      <span>Profile</span>
     </a>
   </div>
 </div>
@@ -460,9 +460,9 @@
     <div class="page-title-group">
       <h1>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="14 4 14 9 19 9"></polyline></svg>
-        News Mode Profile
+        Profile
       </h1>
-      <p>Configure the topics and keywords for multi-field news digests (governs <code>/news</code> command & News mode runs).</p>
+      <p>Configure the topics and keywords for the agent to reference.</p>
     </div>
     <div class="field-limit-badge" id="limit-badge">0 / 10 Fields</div>
   </div>
@@ -525,7 +525,7 @@ function renderFields() {
   if (fieldsData.length === 0) {
     container.innerHTML = `
       <div class="empty-fields">
-        <p>No news fields configured yet.</p>
+        <p>No fields configured yet.</p>
         <p style="margin-top:6px; font-size:12.5px;">Click <strong>Add Topic Field</strong> above to define your first topic.</p>
       </div>
     `;

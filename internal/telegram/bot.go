@@ -77,7 +77,6 @@ func NewBot(ctx context.Context, token string, cfg *BotConfig) (*Bot, error) {
 	commands := tgbotapi.NewSetMyCommands(
 		tgbotapi.BotCommand{Command: "agent", Description: "Run an autonomous agent"},
 		tgbotapi.BotCommand{Command: "research", Description: "Run deep research"},
-		tgbotapi.BotCommand{Command: "news", Description: "Fetch profile-driven news digest [duration]"},
 		tgbotapi.BotCommand{Command: "cancel", Description: "Cancel the current run"},
 	)
 	if _, err := api.Request(commands); err != nil {

@@ -97,15 +97,11 @@ func maskAPIKey(key string) string {
 	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
 }
 
-func NewClient(cfg config.OpenCodeZenConfig) *Client {
-	model := cfg.DefaultModel
-	if model == "" {
-		model = "mimo-v2.5-free"
-	}
+func NewClient(p config.ProviderConfig) *Client {
 	return &Client{
-		baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
-		apiKey:  cfg.APIKey,
-		model:   model,
+		baseURL: strings.TrimSuffix(p.BaseURL, "/"),
+		apiKey:  p.APIKey,
+		model:   p.Model,
 		hc:      &http.Client{Timeout: 10 * time.Minute},
 	}
 }
@@ -115,7 +111,7 @@ func NewClientFromConfigPath(path string) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(cfg.OpenCodeZen), nil
+	return NewClient(cfg.ActiveProviderConfig()), nil
 }
 
 func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {

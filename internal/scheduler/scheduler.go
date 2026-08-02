@@ -42,9 +42,7 @@ type Config struct {
 // ---------------------------------------------------------------------------
 // Validation dependencies.
 //
-// LoadConfig needs to know whether Telegram is enabled and which chat
-// ids are allowlisted, so it can fail-fast on bad news_jobs. The
-// scheduler package stays decoupled from internal/config — we accept
+// The scheduler package stays decoupled from internal/config — we accept
 // the answers as small interfaces that the caller fills in.
 //
 // This is the same decoupling pattern the rest of the codebase uses
@@ -111,7 +109,7 @@ func WithAPIKey(apiKey string) Option {
 
 
 
-// Scheduler manages ticker-based recurring scrape + news jobs.
+// Scheduler manages ticker-based recurring scrape jobs.
 type Scheduler struct {
 	config     *Config
 	store      *store.Store
@@ -190,8 +188,7 @@ func (s *Scheduler) RunJob(ctx context.Context, job JobConfig) error {
 // ---------------------------------------------------------------------------
 
 // Start launches background goroutines for all configured jobs.
-// Scrape jobs and news jobs run in independent ticker goroutines; a
-// crash or hang in one does not affect the other. Blocks until ctx is
+// Scrape jobs run in independent ticker goroutines. Blocks until ctx is
 // done.
 func (s *Scheduler) Start(ctx context.Context) error {
 	if s.config == nil {

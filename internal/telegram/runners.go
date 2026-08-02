@@ -33,7 +33,7 @@ type ResearchRunner func(ctx context.Context, goal string, runID int64) (*store.
 
 
 // EngineBackends bundles the runners for /agent, /research, /fetch,
-// and /news plus the SessionManager that owns per-chat slots and
+// plus the SessionManager that owns per-chat slots and
 // persistence. main.go constructs this once and injects it via
 // WithBackends. All fields are optional: a nil runner leaves the
 // corresponding command as the "not wired" stub;
@@ -46,7 +46,7 @@ type EngineBackends struct {
 }
 
 // WithBackends wires the engine-backed command handlers (/agent,
-// /research, /fetch, /news) and the chat-busy enforcement
+// /research, /fetch) and the chat-busy enforcement
 // (/cancel, /status). It is a no-op for the verbs that are already
 // handled by built-ins (/start, /help). Calling WithBackends more
 // than once is safe — the last call wins.

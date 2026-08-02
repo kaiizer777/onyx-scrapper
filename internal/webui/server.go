@@ -24,10 +24,7 @@ import (
 //go:embed templates/*.html
 var templatesFS embed.FS
 
-// ConfigPath is the on-disk location of config.yaml. The web UI writes back to
-// this path when the user updates provider settings. The cmd/onyx/main.go
-// entrypoint also reads from "config.yaml" at startup, so a single constant
-// keeps both sides in sync.
+// ConfigPath is the on-disk location of config.yaml.
 const ConfigPath = "config.yaml"
 
 // UIHandler manages the web dashboard UI
@@ -93,7 +90,6 @@ func (h *UIHandler) handleProfilePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 func (h *UIHandler) handleHistory(w http.ResponseWriter, r *http.Request) {
 	limit := 50
 	if l := r.URL.Query().Get("limit"); l != "" {
@@ -116,101 +112,113 @@ func (h *UIHandler) handleHistory(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(history)
 }
 
-// settingsResponse is the JSON shape returned to the browser for the
-// Settings modal. The API key is always masked here.
-type settingsResponse struct {
-	Provider       string   `json:"provider"`
-	BaseURL        string   `json:"base_url"`
-	APIKeyMasked   string   `json:"api_key_masked"`
-	APIKeySet       bool          `json:"api_key_set"`
-	Model           string        `json:"model"`
-	SavedModels     []config.SavedModel `json:"saved_models"`
-	Providers       []providerDTO `json:"providers"`
-	AvailableModels []string      `json:"available_models"`
-	ProviderKeysSet map[string]bool   `json:"provider_keys_set"`
-	ProviderURLs    map[string]string `json:"provider_urls"`
+// providerDTO is the JSON shape for a provider preset in the dropdown.
+type providerDTO struct {
+	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	BaseURL      string   `json:"base_url"`
+	Models       []string `json:"models"`
+	SupportsList bool     `json:"supports_list"`
 }
 
-type providerDTO struct {
-	ID          string   `json:"id"`
-	Label       string   `json:"label"`
-	BaseURL     string   `json:"base_url"`
-	Models      []string `json:"models"`
-	SupportsList bool    `json:"supports_list"`
+// providerStateDTO is the JSON shape for a stored provider config sent to the UI.
+type providerStateDTO struct {
+	APIKeySet    bool   `json:"api_key_set"`
+	APIKeyMasked string `json:"api_key_masked"`
+	BaseURL      string `json:"base_url"`
+	Model        string `json:"model"`
+}
+
+// settingsResponse is the JSON shape returned to the browser for the Settings modal.
+type settingsResponse struct {
+	// ActiveProvider is the currently selected provider ID.
+	ActiveProvider string `json:"active_provider"`
+
+	// ProviderConfigs maps provider ID → stored state (masked key, url, model).
+	ProviderConfigs map[string]providerStateDTO `json:"provider_configs"`
+
+	// SavedModels is the cross-provider model bookmark list.
+	SavedModels []config.SavedModel `json:"saved_models"`
+
+	// Providers is the static catalog (presets, model lists).
+	Providers []providerDTO `json:"providers"`
+
+	// AvailableModels is the live model list for the active provider.
+	AvailableModels []string `json:"available_models"`
 }
 
 func (h *UIHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	resp := settingsResponse{
-		Provider: "opencode_zen",
+	cfg, _ := config.LoadConfig(ConfigPath)
+	if cfg == nil {
+		cfg = &config.Config{}
 	}
 
-	// Try the on-disk config first; if it's missing or invalid, fall back to
-	// the values currently held by the running client (which were seeded at
-	// startup).
-	cfg, _ := config.LoadConfig(ConfigPath)
-	if cfg != nil && cfg.OpenCodeZen.BaseURL != "" {
-		resp.BaseURL = cfg.OpenCodeZen.BaseURL
-		resp.APIKeySet = cfg.OpenCodeZen.APIKey != ""
-		resp.Model = cfg.OpenCodeZen.DefaultModel
-		resp.SavedModels = cfg.OpenCodeZen.SavedModels
-		if resp.SavedModels == nil {
-			resp.SavedModels = []config.SavedModel{}
-		}
-		resp.Provider = matchProviderID(cfg.OpenCodeZen.BaseURL)
-		
-		resp.ProviderKeysSet = make(map[string]bool)
-		for k, v := range cfg.OpenCodeZen.ProviderKeys {
-			if v != "" {
-				resp.ProviderKeysSet[k] = true
+	// Build the per-provider state map for the UI.
+	providerConfigs := make(map[string]providerStateDTO)
+	if cfg.Providers != nil {
+		for id, p := range cfg.Providers {
+			providerConfigs[id] = providerStateDTO{
+				APIKeySet:    p.APIKey != "",
+				APIKeyMasked: maskForDisplay(p.APIKey),
+				BaseURL:      p.BaseURL,
+				Model:        p.Model,
 			}
 		}
-		resp.ProviderURLs = cfg.OpenCodeZen.ProviderURLs
-		if resp.ProviderURLs == nil {
-			resp.ProviderURLs = make(map[string]string)
-		}
-	} else if h.client != nil {
-		baseURL, model, masked := h.client.Snapshot()
-		resp.BaseURL = baseURL
-		resp.APIKeySet = h.client.RawAPIKey() != ""
-		resp.APIKeyMasked = masked
-		resp.Model = model
-		resp.Provider = matchProviderID(baseURL)
 	}
 
-	if cfg != nil {
-		resp.APIKeyMasked = maskForDisplay(cfg.OpenCodeZen.APIKey)
-	} else if resp.APIKeyMasked == "" && h.client != nil {
-		_, _, masked := h.client.Snapshot()
-		resp.APIKeyMasked = masked
+	activeProvider := cfg.ActiveProvider
+	if activeProvider == "" {
+		activeProvider = "opencode_zen"
 	}
 
-	// Curated list for the currently configured provider — used as a fallback
-	// if the user has not yet entered a base URL + API key.
-	models, _ := llm.ListModels(r.Context(), resp.Provider, resp.BaseURL, apiKeyForListing(cfg, h.client))
-	resp.AvailableModels = models
+	// Determine the base URL + API key for the active provider to fetch live models.
+	activeP := cfg.ActiveProviderConfig()
+	apiKeyForList := activeP.APIKey
+	if apiKeyForList == "" && h.client != nil {
+		apiKeyForList = h.client.RawAPIKey()
+	}
+	models, _ := llm.ListModels(r.Context(), activeProvider, activeP.BaseURL, apiKeyForList)
 
-	// Static provider list for the dropdown.
+	savedModels := cfg.SavedModels
+	if savedModels == nil {
+		savedModels = []config.SavedModel{}
+	}
+
 	providers := llm.Providers()
-	resp.Providers = make([]providerDTO, 0, len(providers))
+	dtos := make([]providerDTO, 0, len(providers))
 	for _, p := range providers {
-		resp.Providers = append(resp.Providers, providerDTO{
-			ID:          p.ID,
-			Label:       p.Label,
-			BaseURL:     p.BaseURL,
-			Models:      p.Models,
+		dtos = append(dtos, providerDTO{
+			ID:           p.ID,
+			Label:        p.Label,
+			BaseURL:      p.BaseURL,
+			Models:       p.Models,
 			SupportsList: p.SupportsList,
 		})
+	}
+
+	resp := settingsResponse{
+		ActiveProvider:  activeProvider,
+		ProviderConfigs: providerConfigs,
+		SavedModels:     savedModels,
+		Providers:       dtos,
+		AvailableModels: models,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
+// postSettingsRequest is the JSON body for POST /ui/settings.
 type postSettingsRequest struct {
-	Provider    string   `json:"provider"`
-	BaseURL     string   `json:"base_url"`
-	APIKey      string   `json:"api_key"`
-	Model       string              `json:"model"`
+	// Provider is the provider ID being saved (e.g. "openai", "anthropic").
+	Provider string `json:"provider"`
+	// BaseURL is the endpoint for this provider.
+	BaseURL string `json:"base_url"`
+	// APIKey — blank means "keep the stored key unchanged".
+	APIKey string `json:"api_key"`
+	// Model is the selected model for this provider (also becomes the active model).
+	Model string `json:"model"`
+	// SavedModels is the full cross-provider bookmark list.
 	SavedModels []config.SavedModel `json:"saved_models"`
 }
 
@@ -221,8 +229,7 @@ func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req.BaseURL = strings.TrimSpace(req.BaseURL)
-	req.BaseURL = strings.TrimSuffix(req.BaseURL, "/")
+	req.BaseURL = strings.TrimSuffix(strings.TrimSpace(req.BaseURL), "/")
 	if req.BaseURL == "" {
 		http.Error(w, "base_url is required", http.StatusBadRequest)
 		return
@@ -232,57 +239,67 @@ func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load existing config so we don't clobber unrelated keys.
+	// Load existing config — start fresh if missing.
 	cfg, err := config.LoadConfig(ConfigPath)
 	if err != nil {
-		// Missing file is fine — start a new config.
 		cfg = &config.Config{}
 	}
-	cfg.OpenCodeZen.BaseURL = req.BaseURL
-	cfg.OpenCodeZen.DefaultModel = req.Model
-	cfg.OpenCodeZen.SavedModels = req.SavedModels
-	if cfg.OpenCodeZen.ProviderKeys == nil {
-		cfg.OpenCodeZen.ProviderKeys = make(map[string]string)
+	if cfg.Providers == nil {
+		cfg.Providers = make(map[string]config.ProviderConfig)
 	}
-	if cfg.OpenCodeZen.ProviderURLs == nil {
-		cfg.OpenCodeZen.ProviderURLs = make(map[string]string)
-	}
-	
+
+	// Upsert this provider's entry, preserving the existing key if no new one supplied.
+	existing := cfg.Providers[req.Provider]
 	if strings.TrimSpace(req.APIKey) != "" {
-		cfg.OpenCodeZen.APIKey = strings.TrimSpace(req.APIKey)
-		cfg.OpenCodeZen.ProviderKeys[req.Provider] = strings.TrimSpace(req.APIKey)
+		existing.APIKey = strings.TrimSpace(req.APIKey)
 	}
-	cfg.OpenCodeZen.ProviderURLs[req.Provider] = req.BaseURL
+	existing.BaseURL = req.BaseURL
+	existing.Model = req.Model
+	cfg.Providers[req.Provider] = existing
+
+	// Update active provider and cross-provider model bookmarks.
+	cfg.ActiveProvider = req.Provider
+	cfg.SavedModels = req.SavedModels
 
 	if err := config.SaveConfig(ConfigPath, cfg); err != nil {
 		http.Error(w, "failed to persist settings: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Apply live to the running client so subsequent chat calls use the new
-	// model without requiring a restart.
+	// Apply live to the running client immediately.
 	if h.client != nil {
 		h.client.SetBaseURL(req.BaseURL)
 		h.client.SetModel(req.Model)
-		if strings.TrimSpace(req.APIKey) != "" {
-			h.client.SetAPIKey(strings.TrimSpace(req.APIKey))
+		if apiKey := cfg.Providers[req.Provider].APIKey; apiKey != "" {
+			h.client.SetAPIKey(apiKey)
 		}
 	}
 
-	// Best-effort verify the key by listing models with a short timeout.
+	// Best-effort verify by listing models.
 	verifyCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	models, _ := llm.ListModels(verifyCtx, matchProviderID(req.BaseURL), req.BaseURL, effectiveAPIKey(cfg, req.APIKey))
+	models, _ := llm.ListModels(verifyCtx, req.Provider, req.BaseURL, cfg.Providers[req.Provider].APIKey)
+
+	// Build the updated provider_configs map for the response.
+	providerConfigs := make(map[string]providerStateDTO)
+	for id, p := range cfg.Providers {
+		providerConfigs[id] = providerStateDTO{
+			APIKeySet:    p.APIKey != "",
+			APIKeyMasked: maskForDisplay(p.APIKey),
+			BaseURL:      p.BaseURL,
+			Model:        p.Model,
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"ok":               true,
-		"provider":         matchProviderID(req.BaseURL),
+		"active_provider":  req.Provider,
 		"base_url":         req.BaseURL,
 		"model":            req.Model,
-		"saved_models":     req.SavedModels,
-		"api_key_masked":   maskForDisplay(cfg.OpenCodeZen.APIKey),
+		"saved_models":     cfg.SavedModels,
 		"available_models": models,
+		"provider_configs": providerConfigs,
 	})
 }
 
@@ -291,13 +308,14 @@ func (h *UIHandler) handleListModels(w http.ResponseWriter, r *http.Request) {
 	baseURL := strings.TrimSuffix(strings.TrimSpace(r.URL.Query().Get("base_url")), "/")
 	apiKey := strings.TrimSpace(r.URL.Query().Get("api_key"))
 
-	// If the user did not pass an explicit api_key (typical for the model
-	// picker when nothing has changed), fall back to the current configured
-	// key so the curated list is augmented with the live /models response.
+	// Fall back to the stored key for this provider if none was passed.
 	if apiKey == "" {
 		if cfg, err := config.LoadConfig(ConfigPath); err == nil && cfg != nil {
-			apiKey = cfg.OpenCodeZen.APIKey
-		} else if h.client != nil {
+			if p, ok := cfg.Providers[provider]; ok {
+				apiKey = p.APIKey
+			}
+		}
+		if apiKey == "" && h.client != nil {
 			apiKey = h.client.RawAPIKey()
 		}
 	}
@@ -319,23 +337,6 @@ func (h *UIHandler) handleListModels(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func matchProviderID(baseURL string) string {
-	base := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(baseURL), "/"))
-	switch {
-	case strings.Contains(base, "opencode.ai/zen"):
-		return "opencode_zen"
-	case strings.HasPrefix(base, "https://api.openai.com"):
-		return "openai"
-	case strings.HasPrefix(base, "https://api.anthropic.com"):
-		return "anthropic"
-	case strings.Contains(base, "api.groq.com"):
-		return "groq"
-	case strings.Contains(base, "openrouter.ai"):
-		return "openrouter"
-	}
-	return "custom"
-}
-
 func maskForDisplay(key string) string {
 	if key == "" {
 		return ""
@@ -347,24 +348,4 @@ func maskForDisplay(key string) string {
 		return key[:2] + strings.Repeat("*", len(key)-2)
 	}
 	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
-}
-
-func effectiveAPIKey(cfg *config.Config, override string) string {
-	if s := strings.TrimSpace(override); s != "" {
-		return s
-	}
-	if cfg != nil {
-		return cfg.OpenCodeZen.APIKey
-	}
-	return ""
-}
-
-func apiKeyForListing(cfg *config.Config, client *llm.Client) string {
-	if cfg != nil && cfg.OpenCodeZen.APIKey != "" {
-		return cfg.OpenCodeZen.APIKey
-	}
-	if client != nil {
-		return client.RawAPIKey()
-	}
-	return ""
 }

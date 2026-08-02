@@ -248,12 +248,6 @@ news:
 # Explicit window override — same parser Telegram uses
 .\onyx.exe news --window "past week"
 
-# Single-field debug run (operator-only, doesn't change profile)
-.\onyx.exe news --field "AI/ML" --window "last 3 days" --json
-```
-
-`--window` accepts any duration phrase the recency parser recognises — see the [📰 News Mode](#-news-mode) section for the full table. The `field` list itself is **always** read from your saved profile; the trigger message never changes it.
-
 ---
 
 ## 🌐 HTTP API Reference (`localhost:9090`)
@@ -266,16 +260,15 @@ news:
 | `/extract` | POST | Extract structured JSON | `curl -X POST http://localhost:9090/extract -d '{"url":"https://example.com","schema":"article"}'` |
 | `/agent` | POST | Trigger autonomous agent | `curl -X POST http://localhost:9090/agent -d '{"goal":"extract title from https://example.com"}'` |
 | `/deep-research` | POST | Trigger deep research | `curl -X POST http://localhost:9090/deep-research -d '{"query":"latest advancements in solid state batteries"}'` |
-| `/news` | POST | Trigger profile-driven news digest | `curl -X POST http://localhost:9090/news -d '{"window":"past 24h"}'` |
 | `/crawl` | POST | Start background crawl | `curl -X POST http://localhost:9090/crawl -d '{"url":"https://example.com"}'` |
 | `/ui` | GET | Unified Agent & Research Web UI | Open `http://localhost:9090/ui` |
 
 ### 🖥️ Web UI
 
 Accessible at `http://localhost:9090/ui`. 
-This unified single-page application replaces the older multi-page dashboard. The mode picker offers **Agent**, **Deep Research**, and **News** as the three top-level options. For Agent and Deep Research you type a free-form goal/query and watch the execution steps stream in live with collapsible details, then view the final generated markdown report. For News the input is a single **recency window** field (e.g. `past 24h`); the result is rendered as one card per profile field, never a merged scroll.
+This unified single-page application replaces the older multi-page dashboard. The mode picker offers **Agent** and **Deep Research** as the two top-level options. You type a free-form goal/query and watch the execution steps stream in live with collapsible details, then view the final generated markdown report.
 
-The companion page `http://localhost:9090/ui/profile` is where you set up and maintain your News profile — add/remove fields, edit keyword lists, drag-reorder priority, and toggle fields on/off. Profile changes are persisted to the `user_profiles` and `profile_fields` tables immediately and apply to the next `/news` run.
+The companion page `http://localhost:9090/ui/profile` is where you set up and maintain your profile — add/remove fields, edit keyword lists, drag-reorder priority, and toggle fields on/off. Profile changes are persisted to the `user_profiles` and `profile_fields` tables immediately.
 
 **⚙️ Interactive LLM Configuration**
 The Web UI features a built-in Settings modal that lets you configure your LLM provider (OpenCode Zen, OpenAI, Anthropic, Groq, OpenRouter, etc.), input your API key, and dynamically fetch/select available models without needing to restart the server or manually edit `config.yaml`.
@@ -286,7 +279,7 @@ The Web UI features a built-in Settings modal that lets you configure your LLM p
 
 ## 🔌 Telegram Gateway
 
-Onyx includes a fully-featured, built-in Telegram Bot integration. This allows you to interact with the autonomous agent (`/agent`), run deep research (`/research`), pull profile-driven news digests (`/news`), and get updates straight to your phone.
+Onyx includes a fully-featured, built-in Telegram Bot integration. This allows you to interact with the autonomous agent (`/agent`), run deep research (`/research`), and get updates straight to your phone.
 
 ### Setup & Authentication
 1. **Get a Token**: Message [@BotFather](https://t.me/botfather) on Telegram to create a bot and get an HTTP API Token.
@@ -304,21 +297,12 @@ Onyx includes a fully-featured, built-in Telegram Bot integration. This allows y
 | `/start` | Welcomes the operator and shows the chat ID for allowlist setup. | Also re-enables the integration if `allowed_chat_ids` was empty. |
 | `/agent <goal>` | Runs the autonomous ReAct agent against a plain-English goal. | Same engine as `.\onyx.exe agent`. |
 | `/research <query>` | Runs the deep-research orchestrator. | Same engine as `.\onyx.exe deep-research`. |
-| `/news [duration phrase]` | Pulls a profile-driven news digest. Empty payload uses `news.default_window`. | See [📰 News Mode](#-news-mode) for phrase examples. Topics come from your saved profile, never from the trigger message. |
 | `/fetch <url>` | Quick single-URL fetch + clean. | Skips the orchestrator. |
 | `/extract <url>` | Single-URL structured extraction. | Skips the orchestrator. |
 | `/search <query>` | Full-text search the local SQLite lake. | Same as `.\onyx.exe search`. |
-| `/cancel` | Cancels the in-flight `/agent` / `/research` / `/news` run for this chat. | Uses the same `CancelFunc` mechanism across all three. |
+| `/cancel` | Cancels the in-flight `/agent` / `/research` run for this chat. | Uses the same `CancelFunc` mechanism across both. |
 | `/status` | Shows the most recent run for this chat. | |
 | `/help` | Lists all commands with usage hints. | |
-
-**News-specific behaviour:**
-
-- `/news` alone → uses `news.default_window` from `config.yaml` (default `24h`); the bot will **not** ask you for a topic — fields are fixed by your profile at `http://localhost:9090/ui/profile`.
-- `/news past week` → parses the duration, runs against every enabled field in priority order, delivers the per-field digest in HTML with bold headers + `━━━` dividers and the existing 4096-char chunker.
-- `/cancel` while a news run is in flight → stops the orchestrator, the chat goes quiet, and a "run cancelled" ack is sent.
-
-Per-chat rate limit on `/news` reuses the existing bucket shared with `/agent` and `/research` — there is no separate news-only budget.
 
 ### Polling vs. Webhook
 - **Polling (Default)**: The easiest way to run the bot. It periodically checks Telegram for new messages. Best for local development and standard self-hosting.
@@ -339,96 +323,7 @@ To run the HTTP API, Ticker Scheduler, and Telegram polling gateway all in a sin
 
 ---
 
-## 📰 News Mode
 
-News Mode is Onyx's 4th interaction mode alongside `agent` and `deep-research`. It exists to answer one question with zero prompt engineering: *"What happened in my fields lately?"* The trigger is a single duration phrase; the field list is fixed by your profile.
-
-### The two-axis model
-
-| Axis | Source | Example |
-|---|---|---|
-| **Fields** (what to track) | Your saved profile, set once in the Web UI | "AI/ML", "Gaming", "Cricket" |
-| **Window** (how far back) | The trigger message / CLI flag | `past 24h`, `yesterday`, `last week` |
-
-The trigger message is parsed **only** for a duration — any extra text (typos, "btw", "thanks", even hostile payloads) is sanitised and ignored. Topics are never inferred from chat. This is by design: it keeps the run predictable, the cost bounded, and the digest shape consistent run-to-run.
-
-### Profile setup (one-time)
-
-Open the Web UI at `http://localhost:9090/ui/profile` (or `POST /profile` for headless setup) and add your fields. Each field has:
-
-- **field name** — display label shown as the section header (e.g. `AI/ML`)
-- **keywords** — comma-separated search terms fed to Google News RSS `q=` (e.g. `LLM, generative AI, machine learning`)
-- **priority order** — drag to reorder; the digest renders fields top-to-bottom in this order
-- **enabled toggle** — disable a field without deleting it
-
-Validation mirrors the Web UI on the server: field name must be non-empty + unique per profile, each field needs at least one keyword, and the total enabled-field count is bounded by `news.max_fields` (default 10) so a single run can't blow the cost budget.
-
-### Triggering a run
-
-Every surface accepts the same `--window` phrase. Pick whichever fits:
-
-| Surface | Example | Notes |
-|---|---|---|
-| **CLI** | `.\onyx.exe news --window "past week"` | `--json` for machine-readable output |
-| **HTTP API** | `POST /news -d '{"window":"past 24h"}'` | Returns `run_id` immediately; poll `GET /news/{id}` |
-| **Telegram** | `/news last 3 days` | Empty payload → default window, no prompt for topic |
-| **Scheduler** | `news_jobs:` block in `schedule.yaml` | Recurring digest with a fixed sink (store or Telegram) |
-
-### Recency phrase examples
-
-The parser (`internal/news/recency.go`) is a small, well-tested allow-list. The trigger message is matched against it, and anything that doesn't match is dropped — including shell metacharacters, RSS operator literals (`when:`, `site:`, `intitle:`), and SQL/XSS payloads. The following are all valid:
-
-| You write | Resolved to |
-|---|---|
-| `past 24h` / `24h` / `today` | `when:1d` |
-| `yesterday` | `when:1d` |
-| `past 3 days` | `when:3d` |
-| `past week` / `this week` | `when:7d` |
-| `past 2 weeks` | `when:14d` |
-| `past month` / `this month` | `when:1m` |
-| `garbage` / empty / missing | falls back to `news.default_window` (default `24h`) |
-
-The run is never blocked waiting for clarification — if the parser can't lock onto a window, you get the configured default and the run proceeds.
-
-### Source chain
-
-News Mode reuses the existing discovery layer — no new paid dependencies. The fallback chain is per-field:
-
-1. **Google News RSS** (primary, keyless) — `news.google.com/rss/search?q=<keywords>+when:<range>`. Free, no signup, native date filter via the `when:` operator.
-2. **SearXNG news category** (fallback) — used when RSS returns fewer than `news.min_articles_backfill` (default 3) items for a field.
-3. **TinyFish Search** (fallback) — agent-native results, can surface news the indexed engines missed.
-
-Full-article body pull (Jina Reader / Colly fallback chain) is only invoked for the top `news.articles_per_field` items per field (default 5) — the orchestrator does not fetch every headline's body.
-
-### Per-field visual separation (AI/ML Audit Fixture Shape)
-
-The digest is rendered in a clean, prose-based "AI/ML Audit Fixture" shape, free of publisher navigation and sidebar clickbait. It is formatted as a strict list of **{field, items[]}** sections in profile priority order. The renderer is shared across surfaces, with surface-appropriate styling:
-
-- **Shape:** `#N SOURCE — Title` (hyperlinked), followed by a 2-3 sentence LLM-generated prose summary.
-- **Strict Recency Cutoff:** Only articles published strictly within the `--window` are included. A hard cutoff is enforced by the orchestrator.
-- **CLI** — `━━━` divider + bold field header per section.
-- **Web UI** — each field in its own card with distinct background, border, and spacing.
-- **Telegram** — bold field header + `━━━` divider line per section, HTML parse mode. Per-field chunking uses the existing 4096-char splitter. `/cancel` cancels an in-flight run via the same `CancelFunc` mechanism `/agent` and `/research` use.
-
-Two fields are never merged into a shared list under one header.
-
-### Cost guardrails
-
-News Mode is bound to the same `quality.max_extra_calls_per_run` budget pool as every other mode. The orchestrator's pre-flight also enforces:
-
-- `news.max_fields` (default 10, hard cap 50) — a `/news` run on a profile with too many enabled fields is rejected before any HTTP call goes out; `news_runs.status` is set to `rejected`.
-- `news.max_articles_per_field` (default 20) — per-field hard ceiling. The orchestrator clamps `articles_per_field` to `min(cfg, max_articles_per_field)` at construction.
-- Per-chat rate limit on `/news` reuses the existing Telegram Phase 9 rate limiter — same bucket as `/agent` and `/research`, no new budget pool.
-
-The dominant cost ceiling is still `quality.max_extra_calls_per_run`; the new `news.*` caps are independent guards on the RSS-flood surface and the per-field worker surface respectively. Budget is shared across fields, not per-field.
-
-### No API key required
-
-News Mode is **intentionally keyless**. The primary headline source is Google News RSS (`news.google.com/rss/search`), which requires no signup and no API key. You do **not** need to configure `NEWSAPI_KEY`, `GNEWS_KEY`, `NEWSDATA_KEY`, or any other paid news API to run `.\onyx.exe news`, the `/news` Telegram command, or any `news_jobs:` block. The `.env.example` and `config.yaml` `news:` block both note this explicitly so operators don't assume otherwise.
-
-For scheduled delivery, recurring news runs go through the same `news_jobs:` block documented in [⏰ Schedule Configuration (`schedule.yaml`)](#-schedule-configuration-scheduleyaml) below — same orchestrator, same per-field chunking, same quality budget.
-
----
 
 ## ⏰ Schedule Configuration (`schedule.yaml`)
 
@@ -447,36 +342,7 @@ jobs:
     schema: "product"
 ```
 
-### Recurring News Digests (`news_jobs:`)
 
-The scheduler also runs profile-driven news digests on a fixed
-interval, reusing the same `news.Orchestrator` the `onyx news` CLI
-command and `/news` Telegram command use. Two sinks are supported:
-
-- **`sink: store`** (default) — persists the digest to `news_runs` +
-  `news_items`. You pull it later via `GET /news/{id}` or the
-  `/ui/profile` history view. Works even with Telegram disabled.
-- **`sink: telegram`** — delivers the per-field digest to
-  `telegram_chat_id` using the same chunker the `/news` command uses.
-  Requires `telegram.enabled: true` in `config.yaml` AND the chat id
-  must be in `telegram.allowed_chat_ids`. Both are validated at
-  `schedule.yaml` load time — the daemon refuses to start on a bad
-  config (fail-fast, not silent drops at run time).
-
-```yaml
-news_jobs:
-  - name: "Daily AI + Gaming Digest"
-    interval: "24h"           # min 1m
-    window: "past 24h"       # recency phrase (Phase 3 parser)
-    profile: "default"       # the operator's default profile
-    sink: "telegram"
-    telegram_chat_id: 1050305220
-```
-
-Quality budget (`quality.max_extra_calls_per_run`) still applies per
-tick — a recurring news run cannot exceed the same per-run call cap a
-manual `/news` run respects. Per-field separation, per-field chunking,
-and HTML parse mode are identical to the live `/news` command.
 
 ---
 
@@ -491,9 +357,7 @@ and HTML parse mode are identical to the live `/news` command.
 - `research_subquestions`: `id`, `run_id`, `question`, `status`
 - `findings`: `id`, `subquestion_id`, `claim`, `source_url`, `source_provider`, `confidence`, `created_at`
 - `user_profiles`: `id`, `name`, `created_at`, `updated_at` — single-operator today, schema allows multiple named profiles later
-- `profile_fields`: `id`, `profile_id`, `field_name`, `keywords_csv`, `priority_order`, `enabled`, `created_at` — the saved News Mode field list
-- `news_runs`: `id`, `profile_id`, `window`, `started_at`, `completed_at`, `status` — one row per News Mode run (CLI / API / Telegram / scheduler)
-- `news_items`: `id`, `run_id`, `field_id`, `title`, `url`, `source`, `published_at`, `summary`, `fetch_integrity` — one row per article surfaced by the orchestrator
+- `profile_fields`: `id`, `profile_id`, `field_name`, `keywords_csv`, `priority_order`, `enabled`, `created_at` — the saved Profile field list
 
 ---
 
@@ -502,7 +366,6 @@ and HTML parse mode are identical to the live `/news` command.
 | Provider | Role | Cost | Notes |
 |---|---|---|---|
 | **SearXNG** | Primary search, unlimited | $0 (self-hosted) | No external rate limits; default for all discovery |
-| **Google News RSS** | News mode primary source | $0 (keyless) | `news.google.com/rss/search?q=…+when:Nd` — recency-filtered, per-field, no API key |
 | **TinyFish Search** | Parallel discovery source | $0 (free tier, no card) | Adds news/image/local coverage SearXNG's indexed engines may miss |
 | **TinyFish Fetch** | Stealth fetch fallback (before ScraperAPI) | $0 (free tier) | Full-browser render, strips boilerplate before content hits context |
 | **Jina `s.jina.ai`** | Query → clean content, single call | $0 (keyless, rate-limited) | Fastest path for quick lookups inside agent steps |

@@ -194,7 +194,7 @@ func NewStore(dbPath string) (*Store, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_telegram_sessions_status ON telegram_sessions(status);")
 	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_sessions_run ON telegram_sessions(run_type, run_id) WHERE run_id IS NOT NULL;")
 
-	// News Mode Profile tables migration
+	// Profile tables migration
 	db.Exec("CREATE TABLE IF NOT EXISTS user_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);")
 	db.Exec("CREATE TABLE IF NOT EXISTS profile_fields (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL, field_name TEXT NOT NULL, keywords_csv TEXT NOT NULL, priority_order INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE, UNIQUE(profile_id, field_name));")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);")

@@ -1128,133 +1128,7 @@
     box-shadow: 0 0 6px var(--brand-primary);
   }
 
-  /* ── News Digest Field Cards ── */
-  .news-field-card {
-    background: linear-gradient(145deg, rgba(15, 25, 45, 0.85) 0%, rgba(8, 12, 22, 0.95) 100%);
-    border: 1px solid rgba(99, 102, 241, 0.18);
-    border-top: 1px solid rgba(99, 102, 241, 0.35);
-    border-radius: 14px;
-    padding: 20px 24px;
-    margin-bottom: 16px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    animation: fadeIn 0.35s ease-out;
-  }
-  /* Digest-level header — the one above all field cards.
-     Without explicit flex + gap, the four spans render flush
-     against each other ("News Digestwindow: 7daysrun #3 …"). */
-  .news-digest-header {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 10px;
-    padding: 10px 14px;
-    margin-bottom: 14px;
-    border-radius: 10px;
-    background: rgba(99, 102, 241, 0.06);
-    border: 1px solid rgba(99, 102, 241, 0.18);
-    font-size: 12px;
-    color: #cbd5e1;
-  }
-  .news-digest-icon { font-size: 15px; line-height: 1; }
-  .news-digest-title {
-    font-weight: 700;
-    color: #e2e8f0;
-    letter-spacing: 0.02em;
-  }
-  .news-digest-window {
-    font-size: 11px;
-    color: #a5b4fc;
-    background: rgba(99, 102, 241, 0.12);
-    border: 1px solid rgba(99, 102, 241, 0.25);
-    padding: 2px 8px;
-    border-radius: 999px;
-  }
-  .news-digest-meta {
-    margin-left: auto;
-    font-size: 11px;
-    color: #94a3b8;
-  }
-  .news-field-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 12px;
-    font-weight: 700;
-    color: #a5b4fc;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    padding-bottom: 12px;
-    margin-bottom: 12px;
-    border-bottom: 1px solid rgba(99, 102, 241, 0.2);
-  }
-  .news-field-header-icon { font-size: 15px; }
-  .news-field-window {
-    margin-left: auto;
-    font-size: 10px;
-    font-weight: 500;
-    color: #64748b;
-    text-transform: none;
-    letter-spacing: 0;
-  }
-  .news-item-row {
-    padding: 14px 16px;
-    margin-bottom: 12px;
-    background: rgba(15, 23, 42, 0.5);
-    border: 1px solid rgba(99, 102, 241, 0.12);
-    border-radius: 10px;
-    transition: border-color 0.18s ease;
-  }
-  .news-item-row:hover { border-color: rgba(99, 102, 241, 0.28); }
-  /* Chip row: #N badge + SOURCE name */
-  .news-item-chip-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 8px;
-  }
-  .news-item-num {
-    background: var(--brand-primary, #6366f1);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: 6px;
-    letter-spacing: 0.02em;
-    flex-shrink: 0;
-  }
-  .news-item-source {
-    color: #94a3b8;
-    font-size: 12px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .news-item-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: #818cf8;
-    margin-bottom: 8px;
-    line-height: 1.35;
-  }
-  .news-item-title a { color: inherit; text-decoration: none; }
-  .news-item-title a:hover { color: #c7d2fe; text-decoration: underline; }
-  /* Body — the LLM-short 2-3 sentence summary */
-  .news-item-body {
-    font-size: 13.5px;
-    color: #cbd5e1;
-    line-height: 1.65;
-  }
-  .news-item-body p {
-    margin: 0 0 8px 0;
-  }
-  .news-item-body p:last-child { margin-bottom: 0; }
-  /* Kept for any legacy references, not emitted by new renderer */
-  .news-item-meta { display: none; }
-  .news-item-summary { display: none; }
-  .news-item-source-link { display: none; }
-  .news-item-integrity { display: none; }
-  .news-item-flag { display: none; }
-  .news-empty-field { font-size: 12px; color: #475569; font-style: italic; padding: 8px 0; }
+
   /* ── Profile Modal Field Rows ── */
   .btn-add {
     display: inline-flex;
@@ -1719,26 +1593,21 @@ function setMode(mode) {
   selectedMode = mode;
   const isResearch = mode === 'research';
   const isAgent = mode === 'agent';
-  const isNews = mode === 'news';
 
   const modeIcon = document.getElementById('current-mode-icon');
   const modeLabel = document.getElementById('current-mode-label');
-  if (modeIcon) modeIcon.textContent = isResearch ? '🔍' : isNews ? '📰' : '⚡';
-  if (modeLabel) modeLabel.textContent = isResearch ? 'Deep Research' : isNews ? 'News Digest' : 'Autonomous Agent';
+  if (modeIcon) modeIcon.textContent = isResearch ? '🔍' : '⚡';
+  if (modeLabel) modeLabel.textContent = isResearch ? 'Deep Research' : 'Autonomous Agent';
 
   const optResearch = document.getElementById('mode-opt-research');
   const optAgent = document.getElementById('mode-opt-agent');
-  const optNews = document.getElementById('mode-opt-news');
   if (optResearch) optResearch.classList.toggle('active', isResearch);
   if (optAgent) optAgent.classList.toggle('active', isAgent);
-  if (optNews) optNews.classList.toggle('active', isNews);
 
   const input = document.getElementById('query-input');
   if (input) {
     if (isResearch) {
       input.placeholder = 'Research any topic, analyze web pages, or generate reports...';
-    } else if (isNews) {
-      input.placeholder = 'Recency window — e.g. "past 24h", "last week", "today"...';
     } else {
       input.placeholder = 'Instruct Onyx Agent to perform a web task...';
     }
@@ -1872,9 +1741,7 @@ async function stopRun() {
   if (!currentRunId || !currentRunType) return;
   const endpoint = currentRunType === 'agent'
     ? `/agent/runs/${currentRunId}/cancel`
-    : currentRunType === 'news'
-      ? `/news/${currentRunId}/cancel`
-      : `/deep-research/${currentRunId}/cancel`;
+    : `/deep-research/${currentRunId}/cancel`;
   
   // Optimistically stop
   setStreamingState(false);
@@ -1916,9 +1783,6 @@ async function submitQuery() {
     if (type === 'agent') {
       endpoint = '/agent/async';
       bodyPayload = { goal: query };
-    } else if (type === 'news') {
-      endpoint = '/news';
-      bodyPayload = { window: query };
     } else {
       endpoint = '/deep-research';
       const maxQ = parseInt(localStorage.getItem('maxQuestions') || '6', 10);
@@ -2017,9 +1881,7 @@ async function pollStatus() {
   try {
     const endpoint = currentRunType === 'agent'
       ? `/agent/runs/${currentRunId}`
-      : currentRunType === 'news'
-        ? `/news/${currentRunId}`
-        : `/deep-research/${currentRunId}`;
+      : `/deep-research/${currentRunId}`;
       
     const res = await fetch(endpoint);
     if (!res.ok) throw new Error("Failed to fetch status");
@@ -2050,7 +1912,7 @@ function renderThread(data) {
       const div = document.createElement('div');
       div.id = 'user-bubble-' + run.id;
       div.className = 'user-bubble';
-      div.textContent = currentRunType === 'news' ? ('📰 News digest — ' + (run.window || 'recent')) : run.goal;
+      div.textContent = run.goal;
       
       const emptyState = document.getElementById('empty-state');
       if (emptyState) emptyState.style.display = 'none';
@@ -2152,8 +2014,6 @@ function renderThread(data) {
       scrollToBottom();
     }
     
-  } else if (currentRunType === 'news') {
-    renderNewsDigest(run, data.items_by_field || [], agentContainer);
   } else if (currentRunType === 'agent') {
     const steps = data.steps || [];
     
@@ -2232,85 +2092,7 @@ function renderThread(data) {
   }
 }
 
-function renderNewsDigest(run, itemsByField, container) {
-  // Show loading indicator while running
-  let loader = document.getElementById('news-loader-' + run.id);
-  if (run.status === 'running' || run.status === 'pending') {
-    if (!loader) {
-      loader = document.createElement('div');
-      loader.id = 'news-loader-' + run.id;
-      loader.className = 'loading-indicator';
-      loader.innerHTML = '<span>Fetching news digest…</span><div class="loading-dots"><span></span><span></span><span></span></div>';
-      container.appendChild(loader);
-      scrollToBottom();
-    }
-    return;
-  } else if (loader) {
-    loader.remove();
-  }
 
-  // Only render once
-  if (document.getElementById('news-digest-' + run.id)) return;
-
-  // Fast path: empty / cancelled — render the inline empty state without
-  // a server round-trip so the UI is immediately responsive. The full
-  // non-empty path below fetches the shared Go-side HTML (Phase 9) so
-  // the Web UI does not duplicate the per-field structure.
-  if (!itemsByField || itemsByField.length === 0) {
-    const empty = document.createElement('div');
-    empty.id = 'news-digest-' + run.id;
-    empty.className = 'error-block';
-    empty.style.background = 'rgba(99,102,241,0.06)';
-    empty.style.borderColor = 'rgba(99,102,241,0.2)';
-    empty.style.color = '#94a3b8';
-    empty.textContent = run.status === 'cancelled' ? 'News run cancelled.' : 'No news items found for your profile in this time window.';
-    container.appendChild(empty);
-    scrollToBottom();
-    return;
-  }
-
-  // Non-empty path: fetch the shared Go-built Markdown report
-  // for this run and render it through marked.parse() into the
-  // SAME "Final Report" card the agent uses. The Go formatter
-  // (FormatMarkdown in internal/news) is the single source of
-  // truth for the per-field / per-article structure — the
-  // Web UI no longer builds it in JS and no longer dumps raw
-  // publisher HTML.
-  fetch(`/news/${run.id}/html`, { headers: { 'Accept': 'text/markdown' } })
-    .then(resp => {
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      return resp.text();
-    })
-    .then(mdStr => {
-      if (document.getElementById('news-digest-' + run.id)) return;
-      const wrapper = document.createElement('div');
-      wrapper.id = 'news-digest-' + run.id;
-      wrapper.className = 'report-container';
-      wrapper.innerHTML = `
-        <div class="report-header" style="display: flex; align-items: center;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-          <span style="flex: 1; margin-left: 8px;">News</span>
-          <svg id="news-speaker-icon-${run.id}" onclick="toggleNewsSpeech(${run.id})" title="Listen to News" style="cursor: pointer; margin-left: auto; margin-right: 12px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-          <svg id="news-pdf-icon-${run.id}" onclick="downloadNewsPDF(${run.id})" title="Download PDF" style="cursor: pointer; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y1="3"></line></svg>
-        </div>
-        <div class="report-content news-report-content" id="news-md-${run.id}">${marked.parse(mdStr)}</div>
-      `;
-      container.appendChild(wrapper);
-      scrollToBottom();
-    })
-    .catch(err => {
-      if (document.getElementById('news-digest-' + run.id)) return;
-      const fallback = document.createElement('div');
-      fallback.id = 'news-digest-' + run.id;
-      fallback.className = 'error-block';
-      fallback.style.background = 'rgba(239,68,68,0.06)';
-      fallback.style.borderColor = 'rgba(239,68,68,0.2)';
-      fallback.style.color = '#fca5a5';
-      fallback.textContent = 'Failed to render news digest: ' + (err && err.message ? err.message : 'unknown error');
-      container.appendChild(fallback);
-      scrollToBottom();
-    });
-}
 
 
 function escapeHtml(unsafe) {
@@ -2327,14 +2109,11 @@ function escapeHtml(unsafe) {
 // Settings modal
 // ──────────────────────────────────────────────────────────────
 let settingsState = {
-  provider: 'opencode_zen',
-  baseURL: '',
-  apiKeyMasked: '',
-  apiKeySet: false,
-  model: '',
-  providers: [],
-  models: [],
-  saved_models: []
+  active_provider: '',
+  provider_configs: {},  // { [providerID]: { api_key_set, api_key_masked, base_url, model } }
+  saved_models: [],
+  providers: [],         // static preset catalog
+  models: [],            // current model list for the open provider tab
 };
 
 let currentActiveModel = '';
@@ -2344,45 +2123,43 @@ function updateActiveModelDropdown() {
   const label = document.getElementById('current-model-label');
   if (!container || !label) return;
   
-  currentActiveModel = currentActiveModel || settingsState.model;
-  const currentActiveProvider = settingsState.provider || 'Provider';
+  const activeProviderID = settingsState.active_provider;
+  const activePC = (settingsState.provider_configs || {})[activeProviderID] || {};
+  const defaultModel = activePC.model || '';
   
-  const providerLabel = (settingsState.providers.find(p => p.id === currentActiveProvider) || {}).label || currentActiveProvider;
+  currentActiveModel = currentActiveModel || defaultModel;
   
-  label.textContent = providerLabel + ' - ' + (currentActiveModel || settingsState.model || 'Default Model');
+  const providerLabel = ((settingsState.providers || []).find(p => p.id === activeProviderID) || {}).label || activeProviderID || 'Provider';
+  label.textContent = providerLabel + ' - ' + (currentActiveModel || defaultModel || 'Default Model');
   
   container.innerHTML = '';
   
-  const addOption = (m, prov, isDefault) => {
+  const addOption = (m, provID, isDefault) => {
     const opt = document.createElement('div');
-    const isActive = m === currentActiveModel && prov === currentActiveProvider;
+    const isActive = m === currentActiveModel && provID === activeProviderID;
     opt.className = 'mode-option' + (isActive ? ' active' : '');
-    opt.onclick = () => { onActiveModelChange(m, prov); };
-    
-    const pLabel = (settingsState.providers.find(p => p.id === prov) || {}).label || prov;
-    
+    opt.onclick = () => { onActiveModelChange(m, provID); };
+    const pLabel = ((settingsState.providers || []).find(p => p.id === provID) || {}).label || provID;
     opt.innerHTML = `
       <div class="mode-opt-info">
-        <div class="mode-opt-title" style="font-size: 13px;">${escapeHtml(pLabel)} - ${escapeHtml(m)} ${isDefault ? '(Default)' : ''}</div>
+        <div class="mode-opt-title" style="font-size: 13px;">${escapeHtml(pLabel)} — ${escapeHtml(m)} ${isDefault ? '(Default)' : ''}</div>
       </div>
       ${isActive ? '<svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
     `;
     container.appendChild(opt);
   };
   
-  if (settingsState.model) {
-    addOption(settingsState.model, settingsState.provider, true);
+  if (defaultModel) {
+    addOption(defaultModel, activeProviderID, true);
   }
   
-  if (settingsState.saved_models) {
-    settingsState.saved_models.forEach(sm => {
-      let m = typeof sm === 'object' ? sm.model : sm;
-      let prov = typeof sm === 'object' ? sm.provider : settingsState.provider;
-      if (m !== settingsState.model || prov !== settingsState.provider) {
-        addOption(m, prov, false);
-      }
-    });
-  }
+  (settingsState.saved_models || []).forEach(sm => {
+    const m = typeof sm === 'object' ? sm.model : sm;
+    const prov = typeof sm === 'object' ? sm.provider : activeProviderID;
+    if (m !== defaultModel || prov !== activeProviderID) {
+      addOption(m, prov, false);
+    }
+  });
 }
 
 async function onActiveModelChange(newModel, newProvider) {
@@ -2392,39 +2169,31 @@ async function onActiveModelChange(newModel, newProvider) {
   btn.classList.remove('open');
   btn.setAttribute('aria-expanded', 'false');
   
-  if (!newModel || (newModel === currentActiveModel && newProvider === settingsState.provider)) return;
-  
-  let base_url = "";
-  if (settingsState.provider_urls && settingsState.provider_urls[newProvider]) {
-    base_url = settingsState.provider_urls[newProvider];
-  } else {
-    const preset = (settingsState.providers || []).find(p => p.id === newProvider);
-    if (preset) base_url = preset.base_url;
-  }
-  
-  if (!base_url) base_url = settingsState.base_url;
+  const activePC = (settingsState.provider_configs || {})[newProvider] || {};
+  const base_url = activePC.base_url || '';
   if (!base_url) return;
+
+  const activeProviderID = settingsState.active_provider;
+  if (newModel === currentActiveModel && newProvider === activeProviderID) return;
   
   currentActiveModel = newModel;
-  settingsState.provider = newProvider;
-  settingsState.base_url = base_url;
+  settingsState.active_provider = newProvider;
   updateActiveModelDropdown();
   
   try {
     await fetch('/ui/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        provider: settingsState.provider, 
-        base_url: settingsState.base_url, 
-        api_key: "",
+      body: JSON.stringify({
+        provider: newProvider,
+        base_url,
+        api_key: '',
         model: newModel,
         saved_models: settingsState.saved_models
       })
     });
-    settingsState.model = newModel;
   } catch (err) {
-    console.error("Failed to change active model", err);
+    console.error('Failed to change active model', err);
   }
 }
 
@@ -2458,36 +2227,51 @@ async function loadSettings() {
     const res = await fetch('/ui/settings');
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
-    settingsState = data;
+    
+    settingsState.active_provider = data.active_provider || 'opencode_zen';
+    settingsState.provider_configs = data.provider_configs || {};
+    settingsState.saved_models = data.saved_models || [];
+    settingsState.providers = data.providers || [];
 
     const providerSelect = document.getElementById('settings-provider');
     providerSelect.innerHTML = '';
-    (data.providers || []).forEach(p => {
+    settingsState.providers.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = p.label;
       providerSelect.appendChild(opt);
     });
-    providerSelect.value = data.provider || 'opencode_zen';
+    // Select the active provider in the dropdown.
+    providerSelect.value = settingsState.active_provider;
 
-    document.getElementById('settings-baseurl').value = data.base_url || '';
-    document.getElementById('settings-model').value = data.model || '';
-
-    const hint = document.getElementById('settings-apikey-hint');
-    if (data.api_key_set) {
-      hint.innerHTML = `Current key: <code>${escapeHtml(data.api_key_masked || '****')}</code> — leave blank to keep it.`;
-    } else {
-      hint.textContent = 'No API key configured. Add one to enable chat.';
-    }
+    // Populate fields from the active provider's stored config.
+    const activePC = settingsState.provider_configs[settingsState.active_provider] || {};
+    document.getElementById('settings-baseurl').value = activePC.base_url || '';
+    document.getElementById('settings-model').value = activePC.model || '';
 
     document.getElementById('settings-provider-pill').textContent =
-      (data.providers.find(p => p.id === data.provider) || {}).label || data.provider || '—';
+      (settingsState.providers.find(p => p.id === settingsState.active_provider) || {}).label || settingsState.active_provider || '—';
 
-    settingsState.saved_models = data.saved_models || [];
-    renderModelList(data.models || [], data.model);
+    _updateAPIKeyHint(settingsState.active_provider);
+
+    // Show available models for the active provider.
+    settingsState.models = (data.providers.find(p => p.id === settingsState.active_provider) || {}).models || [];
+    renderModelList(data.available_models && data.available_models.length ? data.available_models : settingsState.models, activePC.model || '');
     setSettingsStatus('', '');
   } catch (err) {
     setSettingsStatus('Failed to load: ' + err.message, 'error');
+  }
+}
+
+function _updateAPIKeyHint(providerID) {
+  const hint = document.getElementById('settings-apikey-hint');
+  const pc = (settingsState.provider_configs || {})[providerID] || {};
+  const preset = (settingsState.providers || []).find(p => p.id === providerID);
+  const label = preset ? preset.label : providerID;
+  if (pc.api_key_set) {
+    hint.innerHTML = `Stored key for ${escapeHtml(label)}: <code>${escapeHtml(pc.api_key_masked || '****')}</code> — leave blank to keep it.`;
+  } else {
+    hint.textContent = `No API key stored for ${escapeHtml(label)}. Add one to enable chat.`;
   }
 }
 
@@ -2496,18 +2280,22 @@ function onProviderChange() {
   const preset = (settingsState.providers || []).find(p => p.id === providerId);
   document.getElementById('settings-provider-pill').textContent = preset ? preset.label : providerId;
   
-  let storedURL = "";
-  if (settingsState.provider_urls && settingsState.provider_urls[providerId]) {
-    storedURL = settingsState.provider_urls[providerId];
-  }
-  if (storedURL) {
-    document.getElementById('settings-baseurl').value = storedURL;
-  } else if (preset && preset.base_url) {
-    document.getElementById('settings-baseurl').value = preset.base_url;
+  // Restore this provider's stored config if available, else fall back to preset default.
+  const pc = (settingsState.provider_configs || {})[providerId] || {};
+  document.getElementById('settings-baseurl').value = pc.base_url || (preset ? preset.base_url : '');
+  document.getElementById('settings-model').value = pc.model || '';
+  
+  // Always clear the key field when switching providers.
+  document.getElementById('settings-apikey').value = '';
+  if (document.getElementById('settings-apikey').type === 'text') {
+    document.getElementById('settings-apikey').type = 'password';
+    document.getElementById('settings-apikey-toggle').textContent = 'Show';
   }
   
+  _updateAPIKeyHint(providerId);
+
   settingsState.models = preset ? preset.models : [];
-  renderModelList(settingsState.models, document.getElementById('settings-model').value);
+  renderModelList(settingsState.models, pc.model || '');
 }
 
 window.toggleModelSaved = function(m) {
@@ -2517,30 +2305,36 @@ window.toggleModelSaved = function(m) {
   const isSaved = (sm) => (typeof sm === 'object' ? sm.provider === provider && sm.model === m : sm === m);
   const idx = settingsState.saved_models.findIndex(isSaved);
   
+  const activePC = (settingsState.provider_configs || {})[settingsState.active_provider] || {};
+  const defaultModel = activePC.model || '';
+  
   if (idx !== -1) {
-    if (m === settingsState.model && provider === settingsState.provider) {
-      return;
-    }
+    // Don't allow de-saving the current default.
+    if (m === defaultModel && provider === settingsState.active_provider) return;
     settingsState.saved_models.splice(idx, 1);
   } else {
     settingsState.saved_models.push({ provider, model: m });
   }
-  renderModelList(settingsState.models, settingsState.model);
+  renderModelList(settingsState.models, document.getElementById('settings-model').value);
 };
 
 window.setDefaultModel = function(m) {
   const provider = document.getElementById('settings-provider').value;
-  settingsState.model = m;
-  settingsState.provider = provider;
   document.getElementById('settings-model').value = m;
   if (!settingsState.saved_models) settingsState.saved_models = [];
   
   const isSaved = (sm) => (typeof sm === 'object' ? sm.provider === provider && sm.model === m : sm === m);
-  const idx = settingsState.saved_models.findIndex(isSaved);
-  if (idx === -1) {
+  if (settingsState.saved_models.findIndex(isSaved) === -1) {
     settingsState.saved_models.push({ provider, model: m });
   }
-  renderModelList(settingsState.models, settingsState.model);
+  
+  // Update provider_configs in memory so the UI reflects the new default immediately.
+  if (!settingsState.provider_configs) settingsState.provider_configs = {};
+  const pc = settingsState.provider_configs[provider] || {};
+  pc.model = m;
+  settingsState.provider_configs[provider] = pc;
+  
+  renderModelList(settingsState.models, m);
 };
 
 function renderModelList(models, selectedModel) {
@@ -2560,8 +2354,10 @@ function renderModelList(models, selectedModel) {
     datalist.appendChild(opt);
 
     const currentProviderId = document.getElementById('settings-provider').value;
-    const isSaved = (settingsState.saved_models || []).some(x => (typeof x === 'object' ? x.provider === currentProviderId && x.model === m : x === m)) || (m === selectedModel && currentProviderId === settingsState.provider);
-    const isDefault = (m === selectedModel && currentProviderId === settingsState.provider);
+    const activePC = (settingsState.provider_configs || {})[currentProviderId] || {};
+    const isSaved = (settingsState.saved_models || []).some(x => (typeof x === 'object' ? x.provider === currentProviderId && x.model === m : x === m))
+      || (m === selectedModel && currentProviderId === settingsState.active_provider);
+    const isDefault = (m === selectedModel && currentProviderId === settingsState.active_provider);
 
     const item = document.createElement('div');
     item.className = 'model-item' + (isSaved ? ' active' : '');
@@ -2629,6 +2425,13 @@ async function saveSettings() {
   if (!baseURL) return setSettingsStatus('Base URL is required.', 'error');
   if (!model) return setSettingsStatus('Model is required.', 'error');
 
+  // Ensure the current model is bookmarked.
+  if (!settingsState.saved_models) settingsState.saved_models = [];
+  const isSaved = (sm) => (typeof sm === 'object' ? sm.provider === provider && sm.model === model : sm === model);
+  if (settingsState.saved_models.findIndex(isSaved) === -1) {
+    settingsState.saved_models.push({ provider, model });
+  }
+
   const btn = document.getElementById('settings-save-btn');
   btn.disabled = true;
   setSettingsStatus('Saving…', '');
@@ -2642,19 +2445,26 @@ async function saveSettings() {
     const data = await res.json();
     setSettingsStatus(`Saved — using ${data.model} on ${data.base_url}.`, 'success');
 
-    // Update the status dot in the sidebar to reflect "configured" state.
     const dot = document.getElementById('settings-status-dot');
     if (dot) dot.style.opacity = '1';
 
-    // Refresh the list (POST returns the merged model list with live /models if reachable).
-    if (Array.isArray(data.available_models)) {
+    // Sync state from response.
+    if (data.provider_configs) settingsState.provider_configs = data.provider_configs;
+    if (Array.isArray(data.saved_models)) settingsState.saved_models = data.saved_models;
+    if (Array.isArray(data.available_models) && data.available_models.length) {
       settingsState.models = data.available_models;
-      renderModelList(settingsState.models, data.model);
     }
-    if (Array.isArray(data.saved_models)) {
-      settingsState.saved_models = data.saved_models;
-    }
+    settingsState.active_provider = data.active_provider || provider;
+    
+    // Update current model label in chat bar.
+    currentActiveModel = model;
     updateActiveModelDropdown();
+
+    const activePC = (settingsState.provider_configs || {})[provider] || {};
+    renderModelList(settingsState.models, activePC.model || model);
+    _updateAPIKeyHint(provider);
+    document.getElementById('settings-provider-pill').textContent =
+      (settingsState.providers.find(p => p.id === provider) || {}).label || provider;
   } catch (err) {
     setSettingsStatus('Save failed: ' + err.message, 'error');
   } finally {
@@ -2745,82 +2555,7 @@ function toggleSpeech(runId) {
   window.speechSynthesis.speak(utterance);
 }
 
-// toggleNewsSpeech is the news-mode counterpart to
-// toggleSpeech. The news card uses
-// id="news-digest-{id}" for the wrapper and
-// id="news-md-{id}" for the markdown body, so we look
-// those up directly instead of the agent-mode
-// "report-{id}" wrapper.
-function toggleNewsSpeech(runId) {
-  if (!('speechSynthesis' in window)) {
-    alert('Text-to-Speech is not supported in your browser.');
-    return;
-  }
 
-  const icon = document.getElementById('news-speaker-icon-' + runId);
-  const globalIcon = document.getElementById('global-speaker-icon');
-
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-    if (icon) {
-      icon.style.color = 'var(--text-secondary)';
-      icon.classList.remove('speaking');
-    }
-    if (globalIcon) {
-      globalIcon.style.color = 'var(--text-secondary)';
-      globalIcon.classList.remove('speaking');
-    }
-    return;
-  }
-
-  const reportContent = document.getElementById('news-md-' + runId);
-  if (!reportContent) return;
-
-  const text = reportContent.innerText;
-  const utterance = new SpeechSynthesisUtterance(text);
-
-  utterance.onend = function() {
-    if (icon) {
-      icon.style.color = 'var(--text-secondary)';
-      icon.classList.remove('speaking');
-    }
-    if (globalIcon) {
-      globalIcon.style.color = 'var(--text-secondary)';
-      globalIcon.classList.remove('speaking');
-    }
-  };
-
-  if (icon) {
-    icon.style.color = 'var(--brand-primary)';
-    icon.classList.add('speaking');
-  }
-  if (globalIcon) {
-    globalIcon.style.color = 'var(--brand-primary)';
-    globalIcon.classList.add('speaking');
-  }
-
-  window.speechSynthesis.speak(utterance);
-}
-
-// downloadNewsPDF is the news-mode counterpart to
-// downloadPDF — it pulls the rendered markdown body
-// (`#news-md-{id}`) and labels the file as a news
-// digest so the operator's downloads folder stays
-// organized.
-function downloadNewsPDF(runId) {
-  const reportContent = document.getElementById('news-md-' + runId);
-  if (!reportContent) return;
-
-  const opt = {
-    margin:       10,
-    filename:     'News_Digest_' + runId + '.pdf',
-    image:        { type: 'jpeg', quality: 0.98 },
-    html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-    jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
-
-  html2pdf().set(opt).from(reportContent).save();
-}
 
 function toggleSpeechGlobal() {
   if (!currentRunId) {
