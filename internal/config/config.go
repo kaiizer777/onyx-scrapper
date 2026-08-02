@@ -9,11 +9,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type SavedModel struct {
+	Provider string `yaml:"provider" json:"provider"`
+	Model    string `yaml:"model" json:"model"`
+}
+
 type OpenCodeZenConfig struct {
-	BaseURL      string `yaml:"base_url"`
-	APIKey       string   `yaml:"api_key"`
-	DefaultModel string   `yaml:"default_model"`
-	SavedModels  []string `yaml:"saved_models,omitempty"`
+	BaseURL      string            `yaml:"base_url"`
+	APIKey       string            `yaml:"api_key"`
+	DefaultModel string            `yaml:"default_model"`
+	SavedModels  []SavedModel      `yaml:"saved_models,omitempty"`
+	ProviderKeys map[string]string `yaml:"provider_keys,omitempty"`
+	ProviderURLs map[string]string `yaml:"provider_urls,omitempty"`
 }
 
 type TinyFishConfig struct {

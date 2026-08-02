@@ -975,6 +975,7 @@
   }
   .field input[type="text"],
   .field input[type="password"],
+  .field input[type="number"],
   .field select,
   .field textarea {
     background: var(--bg-base);
@@ -1254,6 +1255,120 @@
   .news-item-integrity { display: none; }
   .news-item-flag { display: none; }
   .news-empty-field { font-size: 12px; color: #475569; font-style: italic; padding: 8px 0; }
+  /* ── Profile Modal Field Rows ── */
+  .btn-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-add:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+  .btn-add:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(16, 20, 32, 0.9);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 10px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field-row:focus-within {
+    border-color: var(--border-glow);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+  }
+
+  .reorder-controls { display: flex; flex-direction: column; gap: 2px; }
+  .btn-order {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-order:hover:not(:disabled) { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
+  .btn-order:disabled { opacity: 0.2; cursor: not-allowed; }
+  .btn-order svg { width: 14px; height: 14px; }
+
+  .order-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 3px 7px;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .input-group { display: flex; flex-direction: column; gap: 4px; }
+  .input-group.name-group { flex: 1; max-width: 180px; }
+  .input-group.kw-group { flex: 2; }
+  .input-group label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .text-input {
+    background: #0b0f19;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 7px 10px;
+    color: #ffffff;
+    font-size: 12.5px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .text-input:focus { border-color: var(--brand-primary); }
+  .text-input.invalid { border-color: var(--status-err); background: rgba(248, 113, 113, 0.05); }
+
+  .toggle-group { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 4px; }
+  .toggle-group label { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+
+  .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #1e2638; transition: .2s; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .slider:before {
+    position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
+    background-color: #94a3b8; transition: .2s; border-radius: 50%;
+  }
+  input:checked + .slider { background-color: var(--brand-primary); }
+  input:checked + .slider:before { transform: translateX(16px); background-color: #ffffff; }
+
+  .btn-remove {
+    background: transparent; border: 1px solid transparent; color: var(--text-muted);
+    cursor: pointer; padding: 6px; border-radius: 8px; transition: all 0.2s;
+  }
+  .btn-remove:hover { color: var(--status-err); background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.2); }
+  .btn-remove svg { width: 15px; height: 15px; }
+
+  .empty-fields { padding: 30px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -1287,10 +1402,10 @@
     <!-- History items populated here -->
   </div>
   <div class="sidebar-footer">
-    <a href="/ui/profile" class="btn-settings" style="text-decoration: none;" title="News Profile Settings">
+    <button class="btn-settings" id="btn-profile" onclick="openProfileModal()" title="User Profile Topics & Keywords" style="margin-bottom: 6px;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-      <span>Profile</span>
-    </a>
+      <span>Edit Profile</span>
+    </button>
     <button class="btn-settings" id="btn-settings" onclick="openSettings()" title="Model provider & API key">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       <span>Settings</span>
@@ -1371,6 +1486,42 @@
   </div>
 </div>
 
+<!-- Profile Modal -->
+<div class="modal-overlay" id="profile-modal" onclick="if (event.target === this) closeProfileModal()">
+  <div class="modal" role="dialog" aria-labelledby="profile-title" style="max-width: 720px; width: 90%;">
+    <div class="modal-header">
+      <div class="modal-title" id="profile-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        User Profile Topics & Keywords
+        <span class="field-limit-badge" id="profile-limit-badge" style="font-size: 11px; margin-left: 10px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 2px 8px; border-radius: 12px; font-weight: 500;">0 / 10 Fields</span>
+      </div>
+      <button class="modal-close" onclick="closeProfileModal()" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <span style="font-size: 12.5px; color: var(--text-secondary);">Configure topic fields and interest keywords for your user profile.</span>
+        <button type="button" class="btn-add" id="btn-add-profile" onclick="addProfileFieldRow()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span>Add Topic Field</span>
+        </button>
+      </div>
+
+      <div class="fields-list" id="profile-fields-container" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 4px;">
+        <!-- Dynamic field rows -->
+      </div>
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="status-message" id="profile-status-msg" style="font-size: 12px;"></div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-ghost" onclick="closeProfileModal()">Cancel</button>
+        <button class="btn-primary" id="btn-save-profile" onclick="saveProfileChanges()">Save Profile</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="main">
   <div class="thread" id="thread-scroll">
     <div class="thread-content" id="thread">
@@ -1425,14 +1576,7 @@
             </div>
             <svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
-          <div class="mode-option" id="mode-opt-news" onclick="setMode('news')">
-            <div class="mode-opt-icon">&#128240;</div>
-            <div class="mode-opt-info">
-              <div class="mode-opt-title">News Digest</div>
-              <div class="mode-opt-desc">Profile-driven per-field news, recency-gated</div>
-            </div>
-            <svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-          </div>
+
         </div>
         <div style="position: relative; display: inline-block; margin-left: 8px;">
           <button class="mode-selector" id="model-selector-btn" onclick="toggleModelDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Select Active Model">
@@ -1527,24 +1671,7 @@ function fillPromptSuggestion(text) {
   input.focus();
 }
 
-function updateActiveModelDropdown() {
-  const container = document.getElementById('model-dropdown-options');
-  if (!container) return;
-  container.innerHTML = '';
-  
-  const models = settingsState.saved_models || [];
-  models.forEach(m => {
-    const div = document.createElement('div');
-    div.className = 'mode-option';
-    div.onclick = () => {
-      document.getElementById('current-model-label').textContent = m;
-      document.getElementById('model-dropdown').classList.remove('show');
-      document.getElementById('model-selector-btn').classList.remove('open');
-    };
-    div.innerHTML = `<div class="mode-opt-title" style="padding: 8px 12px">${m}</div>`;
-    container.appendChild(div);
-  });
-}
+
 
 function toggleModeDropdown(e) {
   e.stopPropagation();
@@ -2218,21 +2345,25 @@ function updateActiveModelDropdown() {
   if (!container || !label) return;
   
   currentActiveModel = currentActiveModel || settingsState.model;
-  const providerLabel = (settingsState.providers.find(p => p.id === settingsState.provider) || {}).label || settingsState.provider || 'Provider';
+  const currentActiveProvider = settingsState.provider || 'Provider';
+  
+  const providerLabel = (settingsState.providers.find(p => p.id === currentActiveProvider) || {}).label || currentActiveProvider;
   
   label.textContent = providerLabel + ' - ' + (currentActiveModel || settingsState.model || 'Default Model');
   
   container.innerHTML = '';
   
-  const addOption = (m, isDefault) => {
+  const addOption = (m, prov, isDefault) => {
     const opt = document.createElement('div');
-    const isActive = m === currentActiveModel;
+    const isActive = m === currentActiveModel && prov === currentActiveProvider;
     opt.className = 'mode-option' + (isActive ? ' active' : '');
-    opt.onclick = () => { onActiveModelChange(m); };
+    opt.onclick = () => { onActiveModelChange(m, prov); };
+    
+    const pLabel = (settingsState.providers.find(p => p.id === prov) || {}).label || prov;
     
     opt.innerHTML = `
       <div class="mode-opt-info">
-        <div class="mode-opt-title" style="font-size: 13px;">${escapeHtml(providerLabel)} - ${escapeHtml(m)} ${isDefault ? '(Default)' : ''}</div>
+        <div class="mode-opt-title" style="font-size: 13px;">${escapeHtml(pLabel)} - ${escapeHtml(m)} ${isDefault ? '(Default)' : ''}</div>
       </div>
       ${isActive ? '<svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>' : ''}
     `;
@@ -2240,30 +2371,43 @@ function updateActiveModelDropdown() {
   };
   
   if (settingsState.model) {
-    addOption(settingsState.model, true);
+    addOption(settingsState.model, settingsState.provider, true);
   }
   
   if (settingsState.saved_models) {
-    settingsState.saved_models.forEach(m => {
-      if (m !== settingsState.model) {
-        addOption(m, false);
+    settingsState.saved_models.forEach(sm => {
+      let m = typeof sm === 'object' ? sm.model : sm;
+      let prov = typeof sm === 'object' ? sm.provider : settingsState.provider;
+      if (m !== settingsState.model || prov !== settingsState.provider) {
+        addOption(m, prov, false);
       }
     });
   }
 }
 
-async function onActiveModelChange(newModel) {
+async function onActiveModelChange(newModel, newProvider) {
   const dropdown = document.getElementById('model-dropdown');
   const btn = document.getElementById('model-selector-btn');
   dropdown.classList.remove('show');
   btn.classList.remove('open');
   btn.setAttribute('aria-expanded', 'false');
   
-  if (!newModel || newModel === currentActiveModel) return;
+  if (!newModel || (newModel === currentActiveModel && newProvider === settingsState.provider)) return;
   
-  if (!settingsState.base_url) return;
+  let base_url = "";
+  if (settingsState.provider_urls && settingsState.provider_urls[newProvider]) {
+    base_url = settingsState.provider_urls[newProvider];
+  } else {
+    const preset = (settingsState.providers || []).find(p => p.id === newProvider);
+    if (preset) base_url = preset.base_url;
+  }
+  
+  if (!base_url) base_url = settingsState.base_url;
+  if (!base_url) return;
   
   currentActiveModel = newModel;
+  settingsState.provider = newProvider;
+  settingsState.base_url = base_url;
   updateActiveModelDropdown();
   
   try {
@@ -2351,34 +2495,50 @@ function onProviderChange() {
   const providerId = document.getElementById('settings-provider').value;
   const preset = (settingsState.providers || []).find(p => p.id === providerId);
   document.getElementById('settings-provider-pill').textContent = preset ? preset.label : providerId;
-  if (preset && preset.base_url) {
+  
+  let storedURL = "";
+  if (settingsState.provider_urls && settingsState.provider_urls[providerId]) {
+    storedURL = settingsState.provider_urls[providerId];
+  }
+  if (storedURL) {
+    document.getElementById('settings-baseurl').value = storedURL;
+  } else if (preset && preset.base_url) {
     document.getElementById('settings-baseurl').value = preset.base_url;
   }
-  // Show the preset's curated list immediately; user can hit Refresh to
-  // attempt a live /models call once base_url + key are set.
-  renderModelList(preset ? preset.models : [], document.getElementById('settings-model').value);
+  
+  settingsState.models = preset ? preset.models : [];
+  renderModelList(settingsState.models, document.getElementById('settings-model').value);
 }
 
 window.toggleModelSaved = function(m) {
+  const provider = document.getElementById('settings-provider').value;
   if (!settingsState.saved_models) settingsState.saved_models = [];
-  if (settingsState.saved_models.includes(m)) {
-    if (m === settingsState.model) {
-      // Cannot uncheck default model
+  
+  const isSaved = (sm) => (typeof sm === 'object' ? sm.provider === provider && sm.model === m : sm === m);
+  const idx = settingsState.saved_models.findIndex(isSaved);
+  
+  if (idx !== -1) {
+    if (m === settingsState.model && provider === settingsState.provider) {
       return;
     }
-    settingsState.saved_models = settingsState.saved_models.filter(x => x !== m);
+    settingsState.saved_models.splice(idx, 1);
   } else {
-    settingsState.saved_models.push(m);
+    settingsState.saved_models.push({ provider, model: m });
   }
   renderModelList(settingsState.models, settingsState.model);
 };
 
 window.setDefaultModel = function(m) {
+  const provider = document.getElementById('settings-provider').value;
   settingsState.model = m;
+  settingsState.provider = provider;
   document.getElementById('settings-model').value = m;
   if (!settingsState.saved_models) settingsState.saved_models = [];
-  if (!settingsState.saved_models.includes(m)) {
-    settingsState.saved_models.push(m);
+  
+  const isSaved = (sm) => (typeof sm === 'object' ? sm.provider === provider && sm.model === m : sm === m);
+  const idx = settingsState.saved_models.findIndex(isSaved);
+  if (idx === -1) {
+    settingsState.saved_models.push({ provider, model: m });
   }
   renderModelList(settingsState.models, settingsState.model);
 };
@@ -2399,8 +2559,9 @@ function renderModelList(models, selectedModel) {
     opt.value = m;
     datalist.appendChild(opt);
 
-    const isSaved = (settingsState.saved_models || []).includes(m) || m === selectedModel;
-    const isDefault = m === selectedModel;
+    const currentProviderId = document.getElementById('settings-provider').value;
+    const isSaved = (settingsState.saved_models || []).some(x => (typeof x === 'object' ? x.provider === currentProviderId && x.model === m : x === m)) || (m === selectedModel && currentProviderId === settingsState.provider);
+    const isDefault = (m === selectedModel && currentProviderId === settingsState.provider);
 
     const item = document.createElement('div');
     item.className = 'model-item' + (isSaved ? ' active' : '');
@@ -2667,6 +2828,218 @@ function toggleSpeechGlobal() {
     return;
   }
   toggleSpeech(currentRunId);
+}
+
+const MAX_PROFILE_FIELDS = 10;
+let profileFieldsData = [];
+
+async function openProfileModal() {
+  document.getElementById('profile-modal').classList.add('show');
+  await loadProfileData();
+}
+
+function closeProfileModal() {
+  document.getElementById('profile-modal').classList.remove('show');
+  showProfileStatus('', '');
+}
+
+async function loadProfileData() {
+  const container = document.getElementById("profile-fields-container");
+  container.innerHTML = '<div class="empty-fields">Loading profile fields...</div>';
+  
+  try {
+    const res = await fetch("/profile");
+    if (!res.ok) throw new Error("Failed to load profile");
+    const data = await res.json();
+    profileFieldsData = data.fields || [];
+    renderProfileFields();
+  } catch (err) {
+    showProfileStatus("Error loading profile: " + err.message, "error");
+    container.innerHTML = '<div class="empty-fields">Failed to load profile. Make sure the server is running.</div>';
+  }
+}
+
+function renderProfileFields() {
+  const container = document.getElementById("profile-fields-container");
+  const limitBadge = document.getElementById("profile-limit-badge");
+  const addBtn = document.getElementById("btn-add-profile");
+
+  if (limitBadge) limitBadge.textContent = `${profileFieldsData.length} / ${MAX_PROFILE_FIELDS} Fields`;
+  if (addBtn) addBtn.disabled = profileFieldsData.length >= MAX_PROFILE_FIELDS;
+
+  if (profileFieldsData.length === 0) {
+    container.innerHTML = `
+      <div class="empty-fields">
+        <p>No profile fields configured yet.</p>
+        <p style="margin-top:6px; font-size:12px;">Click <strong>Add Topic Field</strong> above to define your first topic.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = "";
+  profileFieldsData.forEach((field, index) => {
+    const row = document.createElement("div");
+    row.className = "field-row";
+    row.dataset.index = index;
+
+    row.innerHTML = `
+      <div class="reorder-controls">
+        <button class="btn-order" onclick="moveProfileField(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Move Up">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </button>
+        <button class="btn-order" onclick="moveProfileField(${index}, 1)" ${index === profileFieldsData.length - 1 ? 'disabled' : ''} title="Move Down">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+      </div>
+
+      <div class="order-badge">#${index + 1}</div>
+
+      <div class="input-group name-group">
+        <label>Field Name</label>
+        <input type="text" class="text-input field-name-input" value="${escapeHtml(field.field_name || '')}" placeholder="e.g. AI/ML" oninput="updateProfileFieldData(${index}, 'field_name', this.value)" />
+      </div>
+
+      <div class="input-group kw-group">
+        <label>Keywords (CSV)</label>
+        <input type="text" class="text-input field-kw-input" value="${escapeHtml(field.keywords_csv || '')}" placeholder="e.g. LLM, generative AI, ChatGPT" oninput="updateProfileFieldData(${index}, 'keywords_csv', this.value)" />
+      </div>
+
+      <div class="toggle-group">
+        <label>Enabled</label>
+        <label class="switch">
+          <input type="checkbox" ${field.enabled !== false ? 'checked' : ''} onchange="updateProfileFieldData(${index}, 'enabled', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <button class="btn-remove" onclick="removeProfileField(${index})" title="Delete Field">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      </button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function updateProfileFieldData(index, key, val) {
+  if (profileFieldsData[index]) {
+    profileFieldsData[index][key] = val;
+  }
+}
+
+function addProfileFieldRow() {
+  if (profileFieldsData.length >= MAX_PROFILE_FIELDS) return;
+  profileFieldsData.push({
+    field_name: "",
+    keywords_csv: "",
+    priority_order: profileFieldsData.length + 1,
+    enabled: true
+  });
+  renderProfileFields();
+  const inputs = document.querySelectorAll("#profile-fields-container .field-name-input");
+  if (inputs.length > 0) inputs[inputs.length - 1].focus();
+}
+
+function removeProfileField(index) {
+  profileFieldsData.splice(index, 1);
+  renderProfileFields();
+}
+
+function moveProfileField(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= profileFieldsData.length) return;
+  const temp = profileFieldsData[index];
+  profileFieldsData[index] = profileFieldsData[targetIndex];
+  profileFieldsData[targetIndex] = temp;
+  renderProfileFields();
+}
+
+async function saveProfileChanges() {
+  const saveBtn = document.getElementById("btn-save-profile");
+  showProfileStatus("", "");
+
+  const seenNames = new Set();
+  for (let i = 0; i < profileFieldsData.length; i++) {
+    const f = profileFieldsData[i];
+    const name = (f.field_name || "").trim();
+    const kw = (f.keywords_csv || "").trim();
+
+    if (!name) {
+      showProfileStatus(`Field #${i + 1}: Name cannot be empty`, "error");
+      highlightProfileInput(i, 'field-name-input');
+      return;
+    }
+
+    const lowerName = name.toLowerCase();
+    if (seenNames.has(lowerName)) {
+      showProfileStatus(`Duplicate field name "${name}" at position #${i + 1}`, "error");
+      highlightProfileInput(i, 'field-name-input');
+      return;
+    }
+    seenNames.add(lowerName);
+
+    if (!kw) {
+      showProfileStatus(`Field #${i + 1} (${name}): Keywords cannot be empty`, "error");
+      highlightProfileInput(i, 'field-kw-input');
+      return;
+    }
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+
+  try {
+    const payload = {
+      fields: profileFieldsData.map((f, idx) => ({
+        field_name: f.field_name.trim(),
+        keywords_csv: f.keywords_csv.trim(),
+        priority_order: idx + 1,
+        enabled: f.enabled !== false
+      }))
+    };
+
+    const res = await fetch("/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to save profile");
+    }
+
+    profileFieldsData = data.fields || [];
+    renderProfileFields();
+    showProfileStatus("Profile saved successfully!", "success");
+    setTimeout(() => closeProfileModal(), 1200);
+  } catch (err) {
+    showProfileStatus("Error: " + err.message, "error");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Profile";
+  }
+}
+
+function highlightProfileInput(index, className) {
+  const rows = document.querySelectorAll("#profile-fields-container .field-row");
+  if (rows[index]) {
+    const input = rows[index].querySelector("." + className);
+    if (input) {
+      input.classList.add("invalid");
+      input.focus();
+      setTimeout(() => input.classList.remove("invalid"), 3000);
+    }
+  }
+}
+
+function showProfileStatus(msg, type) {
+  const el = document.getElementById("profile-status-msg");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "status-message " + (type || "");
+  if (type === "success") el.style.color = "var(--status-done)";
+  else if (type === "error") el.style.color = "var(--status-err)";
 }
 </script>
 </body>

@@ -124,9 +124,11 @@ type settingsResponse struct {
 	APIKeyMasked   string   `json:"api_key_masked"`
 	APIKeySet       bool          `json:"api_key_set"`
 	Model           string        `json:"model"`
-	SavedModels     []string      `json:"saved_models"`
+	SavedModels     []config.SavedModel `json:"saved_models"`
 	Providers       []providerDTO `json:"providers"`
 	AvailableModels []string      `json:"available_models"`
+	ProviderKeysSet map[string]bool   `json:"provider_keys_set"`
+	ProviderURLs    map[string]string `json:"provider_urls"`
 }
 
 type providerDTO struct {
@@ -151,7 +153,21 @@ func (h *UIHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.APIKeySet = cfg.OpenCodeZen.APIKey != ""
 		resp.Model = cfg.OpenCodeZen.DefaultModel
 		resp.SavedModels = cfg.OpenCodeZen.SavedModels
+		if resp.SavedModels == nil {
+			resp.SavedModels = []config.SavedModel{}
+		}
 		resp.Provider = matchProviderID(cfg.OpenCodeZen.BaseURL)
+		
+		resp.ProviderKeysSet = make(map[string]bool)
+		for k, v := range cfg.OpenCodeZen.ProviderKeys {
+			if v != "" {
+				resp.ProviderKeysSet[k] = true
+			}
+		}
+		resp.ProviderURLs = cfg.OpenCodeZen.ProviderURLs
+		if resp.ProviderURLs == nil {
+			resp.ProviderURLs = make(map[string]string)
+		}
 	} else if h.client != nil {
 		baseURL, model, masked := h.client.Snapshot()
 		resp.BaseURL = baseURL
@@ -194,8 +210,8 @@ type postSettingsRequest struct {
 	Provider    string   `json:"provider"`
 	BaseURL     string   `json:"base_url"`
 	APIKey      string   `json:"api_key"`
-	Model       string   `json:"model"`
-	SavedModels []string `json:"saved_models"`
+	Model       string              `json:"model"`
+	SavedModels []config.SavedModel `json:"saved_models"`
 }
 
 func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
@@ -225,9 +241,18 @@ func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 	cfg.OpenCodeZen.BaseURL = req.BaseURL
 	cfg.OpenCodeZen.DefaultModel = req.Model
 	cfg.OpenCodeZen.SavedModels = req.SavedModels
+	if cfg.OpenCodeZen.ProviderKeys == nil {
+		cfg.OpenCodeZen.ProviderKeys = make(map[string]string)
+	}
+	if cfg.OpenCodeZen.ProviderURLs == nil {
+		cfg.OpenCodeZen.ProviderURLs = make(map[string]string)
+	}
+	
 	if strings.TrimSpace(req.APIKey) != "" {
 		cfg.OpenCodeZen.APIKey = strings.TrimSpace(req.APIKey)
+		cfg.OpenCodeZen.ProviderKeys[req.Provider] = strings.TrimSpace(req.APIKey)
 	}
+	cfg.OpenCodeZen.ProviderURLs[req.Provider] = req.BaseURL
 
 	if err := config.SaveConfig(ConfigPath, cfg); err != nil {
 		http.Error(w, "failed to persist settings: "+err.Error(), http.StatusInternalServerError)
