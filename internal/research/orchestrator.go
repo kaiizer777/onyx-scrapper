@@ -75,8 +75,11 @@ func NewOrchestrator(client *llm.Client, st *store.Store, registry *discoverypkg
 }
 
 func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*store.ResearchRun, error) {
-	if opts.MaxSubQuestions == 0 {
-		opts.MaxSubQuestions = 6
+	// Hard cap: AI controls research depth organically; 40 sub-questions is a
+	// safety ceiling that catches runaway loops but is rarely hit in practice.
+	const maxSubQuestionsHardCap = 40
+	if opts.MaxSubQuestions <= 0 || opts.MaxSubQuestions > maxSubQuestionsHardCap {
+		opts.MaxSubQuestions = maxSubQuestionsHardCap
 	}
 	if opts.MaxReflectionRounds == 0 {
 		opts.MaxReflectionRounds = 5

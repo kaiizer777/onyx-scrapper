@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	DefaultMaxSteps = 35
+	DefaultMaxSteps = 40 // hard cap: catches infinite loops, rarely hit in practice
 	MaxSnippetLen   = 3000
 )
 
@@ -37,6 +37,7 @@ type Agent struct {
 	registry      *discoverypkg.Registry
 	maxSteps      int
 	subQuestionID int64
+	newsContext   string // optional: injected when the goal is news-related
 }
 
 // Option configures Agent parameters.
@@ -62,6 +63,15 @@ func WithSubQuestionID(id int64) Option {
 func WithRegistry(registry *discoverypkg.Registry) Option {
 	return func(a *Agent) {
 		a.registry = registry
+	}
+}
+
+// WithNewsContext injects a user-profile-derived news instruction block into
+// the system prompt. Should only be called when the goal is news-related and
+// the profile has at least one enabled interest field.
+func WithNewsContext(ctx string) Option {
+	return func(a *Agent) {
+		a.newsContext = ctx
 	}
 }
 
@@ -204,6 +214,10 @@ Available actions and arguments:
 	if a.subQuestionID > 0 {
 		systemPrompt += `
 8. record_finding: {"claim": "clear factual statement", "source_url": "URL where claim is found", "confidence": 0.0-1.0} - Immediately saves a finding to the database without stopping the agent.`
+	}
+
+	if a.newsContext != "" {
+		systemPrompt += "\n\n" + a.newsContext
 	}
 
 	systemPrompt += `

@@ -8,6 +8,63 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
+// newsKeywords is a set of lower-cased terms that strongly indicate a news/trend query.
+var newsKeywords = []string{
+	"news", "latest", "recent", "trending", "trend", "today",
+	"breaking", "headline", "headlines", "update", "updates",
+	"current", "happening", "now", "this week", "this month",
+	"2024", "2025", "2026", "new releases", "announcements",
+}
+
+// IsNewsQuery returns true when the query appears to be asking for news or current trends.
+// It is intentionally broad — false positives are cheaper than missed injections.
+func IsNewsQuery(query string) bool {
+	lower := strings.ToLower(query)
+	for _, kw := range newsKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
+}
+
+// BuildNewsContext returns a formatted instruction block listing the user's enabled profile
+// interest fields. The caller should inject this into the LLM system prompt only when the
+// query is news-related. Returns ("", false) when no enabled fields are configured.
+func BuildNewsContext(fields []store.ProfileField) (string, bool) {
+	var enabled []store.ProfileField
+	for _, f := range fields {
+		if f.Enabled {
+			enabled = append(enabled, f)
+		}
+	}
+	if len(enabled) == 0 {
+		return "", false
+	}
+
+	var sb strings.Builder
+	sb.WriteString("USER INTEREST PROFILE — NEWS CONTEXT:\n")
+	sb.WriteString("The user has configured the following interest topics. When fetching news or trends, ")
+	sb.WriteString("ONLY cover these topics (in priority order). For each topic search for the LATEST and MOST RECENT news first.\n\n")
+
+	for i, f := range enabled {
+		keywords := strings.Split(f.KeywordsCSV, ",")
+		var cleanKW []string
+		for _, k := range keywords {
+			if t := strings.TrimSpace(k); t != "" {
+				cleanKW = append(cleanKW, t)
+			}
+		}
+		sb.WriteString(fmt.Sprintf("  %d. Topic: %q | Keywords: [%s]\n",
+			i+1, f.FieldName, strings.Join(cleanKW, ", ")))
+	}
+
+	sb.WriteString("\nSEARCH INSTRUCTION: For each topic above, append 'latest news' or the current year to your search queries. ")
+	sb.WriteString("Prioritize articles from the last 7 days. Do NOT fetch news for topics not listed above.")
+
+	return sb.String(), true
+}
+
 const (
 	DefaultProfileName = "Default Profile"
 	DefaultMaxFields   = 10

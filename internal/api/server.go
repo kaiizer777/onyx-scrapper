@@ -417,16 +417,19 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.MaxSteps <= 0 {
-		req.MaxSteps = 35
-	}
+	// max_steps is no longer user-configurable; always use the hard cap (agent.DefaultMaxSteps = 40).
 
 	if s.client == nil || s.store == nil {
 		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
 		return
 	}
 
-	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithRegistry(s.registry))
+	agentOpts := []agent.Option{agent.WithRegistry(s.registry)}
+	if newsCtx := s.loadNewsContext(req.Goal); newsCtx != "" {
+		agentOpts = append(agentOpts, agent.WithNewsContext(newsCtx))
+	}
+
+	ag := agent.NewAgent(s.client, s.store, agentOpts...)
 	run, err := ag.Run(r.Context(), req.Goal, 0, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("agent execution failed: %v", err))
@@ -457,15 +460,18 @@ func (s *Server) handleAgentAsync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "field 'goal' is required")
 		return
 	}
-	if req.MaxSteps <= 0 {
-		req.MaxSteps = 35
-	}
+	// max_steps is no longer user-configurable; always use the hard cap (agent.DefaultMaxSteps = 40).
 	if s.client == nil || s.store == nil {
 		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
 		return
 	}
 
-	ag := agent.NewAgent(s.client, s.store, agent.WithMaxSteps(req.MaxSteps), agent.WithRegistry(s.registry))
+	agentOpts := []agent.Option{agent.WithRegistry(s.registry)}
+	if newsCtx := s.loadNewsContext(req.Goal); newsCtx != "" {
+		agentOpts = append(agentOpts, agent.WithNewsContext(newsCtx))
+	}
+
+	ag := agent.NewAgent(s.client, s.store, agentOpts...)
 	runID, err := s.store.CreateAgentRun(req.Goal)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create agent run: %v", err))
@@ -701,17 +707,20 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.MaxQuestions <= 0 {
-		req.MaxQuestions = 6
-	}
 
 	if s.client == nil || s.store == nil {
 		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
 		return
 	}
 
+	// Augment the research goal with profile news context when applicable.
+	researchGoal := req.Query
+	if newsCtx := s.loadNewsContext(req.Query); newsCtx != "" {
+		researchGoal = req.Query + "\n\n" + newsCtx
+	}
+
 	orchestrator := research.NewOrchestrator(s.client, s.store, s.registry, nil)
-	
+
 	// Create run ID
 	runID, err := s.store.CreateResearchRun(req.Query)
 	if err != nil {
@@ -719,9 +728,10 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// MaxSubQuestions is omitted — the orchestrator enforces a hard cap of 40 internally.
+	// AI controls research depth; the cap only exists to prevent runaway infinite loops.
 	opts := research.Options{
-		MaxSubQuestions: req.MaxQuestions,
-		ResumeRunID:     runID,
+		ResumeRunID: runID,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -736,7 +746,7 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 			delete(s.activeRuns, runKey)
 			s.activeRunsMu.Unlock()
 		}()
-		_, _ = orchestrator.Run(ctx, req.Query, opts)
+		_, _ = orchestrator.Run(ctx, researchGoal, opts)
 	}()
 
 	w.WriteHeader(http.StatusAccepted) // 202
@@ -914,4 +924,32 @@ func (s *Server) handlePostProfile(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
+// loadNewsContext checks whether query is news-related and, if so, loads the
+// default user profile's enabled interest fields and returns a formatted
+// instruction string for injection into LLM system prompts.
+// Returns "" when the query is not news-related or the profile has no enabled fields.
+func (s *Server) loadNewsContext(query string) string {
+	if s.store == nil {
+		return ""
+	}
+	if !profile.IsNewsQuery(query) {
+		return ""
+	}
+	mgr := profile.NewManager(s.store, profile.Config{})
+	prof, err := mgr.GetOrCreateDefaultProfile()
+	if err != nil {
+		slog.Warn("loadNewsContext: failed to get default profile", "error", err)
+		return ""
+	}
+	fields, err := s.store.ListEnabledProfileFields(prof.ID)
+	if err != nil {
+		slog.Warn("loadNewsContext: failed to list enabled profile fields", "error", err)
+		return ""
+	}
+	ctx, ok := profile.BuildNewsContext(fields)
+	if !ok {
+		return ""
+	}
+	slog.Info("News context injected from user profile", "topics", len(fields))
+	return ctx
+}

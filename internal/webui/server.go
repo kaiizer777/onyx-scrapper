@@ -66,6 +66,8 @@ func (h *UIHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /ui/settings", h.handlePostSettings)
 	mux.HandleFunc("GET /ui/models", h.handleListModels)
 	mux.HandleFunc("GET /ui/profile", h.handleProfilePage)
+	mux.HandleFunc("GET /ui/telegram", h.handleGetTelegramSettings)
+	mux.HandleFunc("POST /ui/telegram", h.handlePostTelegramSettings)
 }
 
 func (h *UIHandler) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -348,4 +350,90 @@ func maskForDisplay(key string) string {
 		return key[:2] + strings.Repeat("*", len(key)-2)
 	}
 	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
+}
+
+// telegramSettingsResponse is the JSON shape returned to the browser for the Telegram modal.
+type telegramSettingsResponse struct {
+	Enabled        bool   `json:"enabled"`
+	BotTokenSet    bool   `json:"bot_token_set"`
+	BotTokenMasked string `json:"bot_token_masked"`
+	AllowedChatIDs string `json:"allowed_chat_ids"` // comma-separated
+}
+
+func (h *UIHandler) handleGetTelegramSettings(w http.ResponseWriter, r *http.Request) {
+	cfg, _ := config.LoadConfig(ConfigPath)
+	if cfg == nil {
+		cfg = &config.Config{}
+	}
+
+	resp := telegramSettingsResponse{}
+	if cfg.Telegram != nil {
+		if cfg.Telegram.Enabled != nil {
+			resp.Enabled = *cfg.Telegram.Enabled
+		}
+		resp.BotTokenSet = cfg.Telegram.BotToken != ""
+		resp.BotTokenMasked = maskForDisplay(cfg.Telegram.BotToken)
+
+		// Convert []int64 to comma-separated string
+		var chatIDs []string
+		for _, id := range cfg.Telegram.AllowedChatIDs {
+			chatIDs = append(chatIDs, strconv.FormatInt(id, 10))
+		}
+		resp.AllowedChatIDs = strings.Join(chatIDs, ", ")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// postTelegramSettingsRequest is the JSON body for POST /ui/telegram.
+type postTelegramSettingsRequest struct {
+	Enabled        bool   `json:"enabled"`
+	BotToken       string `json:"bot_token"` // blank means keep existing
+	AllowedChatIDs string `json:"allowed_chat_ids"`
+}
+
+func (h *UIHandler) handlePostTelegramSettings(w http.ResponseWriter, r *http.Request) {
+	var req postTelegramSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Load existing config
+	cfg, err := config.LoadConfig(ConfigPath)
+	if err != nil {
+		cfg = &config.Config{}
+	}
+	if cfg.Telegram == nil {
+		cfg.Telegram = &config.TelegramConfig{}
+	}
+
+	cfg.Telegram.Enabled = &req.Enabled
+
+	if req.BotToken != "" {
+		cfg.Telegram.BotToken = strings.TrimSpace(req.BotToken)
+	}
+
+	// Parse allowed chat IDs
+	parts := strings.Split(req.AllowedChatIDs, ",")
+	var ids []int64
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if id, err := strconv.ParseInt(p, 10, 64); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	cfg.Telegram.AllowedChatIDs = ids
+
+	if err := config.SaveConfig(ConfigPath, cfg); err != nil {
+		http.Error(w, "failed to save config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Return updated state
+	h.handleGetTelegramSettings(w, r)
 }

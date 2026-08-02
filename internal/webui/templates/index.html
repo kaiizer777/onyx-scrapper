@@ -1276,6 +1276,10 @@
     <!-- History items populated here -->
   </div>
   <div class="sidebar-footer">
+    <button class="btn-settings" id="btn-telegram" onclick="openTelegramModal()" title="Telegram Gateway Settings" style="margin-bottom: 6px;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"></path><path d="m22 2-7 20-4-9-9-4Z"></path></svg>
+      <span>Telegram Gateway</span>
+    </button>
     <button class="btn-settings" id="btn-profile" onclick="openProfileModal()" title="User Profile Topics & Keywords" style="margin-bottom: 6px;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
       <span>Edit Profile</span>
@@ -1335,12 +1339,6 @@
 
 
       <div class="field">
-        <label class="field-label" for="settings-max-questions">Deep Research Limit (Steps)</label>
-        <input type="number" id="settings-max-questions" placeholder="6" min="1" max="20" autocomplete="off" />
-        <div class="field-hint">Maximum number of sub-questions to explore during deep research. Default is 6.</div>
-      </div>
-
-      <div class="field">
         <label class="field-label" style="display:flex;align-items:center;justify-content:space-between">
           <span>Available models</span>
           <button type="button" class="btn-ghost" style="padding:4px 10px;font-size:11px" onclick="refreshModelList()">↻ Refresh</button>
@@ -1355,6 +1353,54 @@
       <div style="display:flex; gap:8px;">
         <button class="btn-ghost" onclick="closeSettings()">Cancel</button>
         <button class="btn-primary" id="settings-save-btn" onclick="saveSettings()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Telegram Gateway Modal -->
+<div class="modal-overlay" id="telegram-modal" onclick="if (event.target === this) closeTelegramModal()">
+  <div class="modal" role="dialog" aria-labelledby="telegram-title">
+    <div class="modal-header">
+      <div class="modal-title" id="telegram-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"></path><path d="m22 2-7 20-4-9-9-4Z"></path></svg>
+        Telegram Gateway
+      </div>
+      <button class="modal-close" onclick="closeTelegramModal()" aria-label="Close">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      
+      <div class="setting-group" style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+          <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Enable Telegram Gateway</span>
+          <div class="switch">
+            <input type="checkbox" id="telegram-enabled-toggle">
+            <span class="slider"></span>
+          </div>
+        </label>
+        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Enables the bot on backend startup.</div>
+      </div>
+
+      <div class="form-group">
+        <label for="telegram-bot-token">Bot Token</label>
+        <input type="password" id="telegram-bot-token" class="form-input" placeholder="Enter Bot Token (leave blank to keep current)">
+        <div class="setting-desc">Provided by @BotFather. Changing this requires restarting `onyx serve`.</div>
+      </div>
+
+      <div class="form-group" style="margin-top: 15px;">
+        <label for="telegram-chat-ids">Allowed Chat IDs</label>
+        <input type="text" id="telegram-chat-ids" class="form-input" placeholder="e.g. 123456789, 987654321">
+        <div class="setting-desc">Comma-separated list of Chat IDs authorized to use the bot. Leave blank for no access.</div>
+      </div>
+
+    </div>
+    <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="status-message" id="telegram-status-msg" style="font-size: 12px;"></div>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-ghost" onclick="closeTelegramModal()">Cancel</button>
+        <button class="btn-primary" id="telegram-save-btn" onclick="saveTelegramSettings()">Save</button>
       </div>
     </div>
   </div>
@@ -1785,8 +1831,7 @@ async function submitQuery() {
       bodyPayload = { goal: query };
     } else {
       endpoint = '/deep-research';
-      const maxQ = parseInt(localStorage.getItem('maxQuestions') || '6', 10);
-      bodyPayload = { query: query, max_questions: maxQ };
+      bodyPayload = { query: query };
     }
     
     const res = await fetch(endpoint, {
@@ -2199,12 +2244,6 @@ async function onActiveModelChange(newModel, newProvider) {
 
 async function openSettings() {
   document.getElementById('settings-modal').classList.add('show');
-  
-  const storedMax = localStorage.getItem('maxQuestions');
-  if (storedMax) {
-      document.getElementById('settings-max-questions').value = storedMax;
-  }
-
   await loadSettings();
 }
 
@@ -2414,13 +2453,6 @@ async function saveSettings() {
   const baseURL = document.getElementById('settings-baseurl').value.trim();
   const apiKey = document.getElementById('settings-apikey').value.trim();
   const model = document.getElementById('settings-model').value.trim();
-  const maxQuestions = document.getElementById('settings-max-questions').value.trim();
-
-  if (maxQuestions) {
-    localStorage.setItem('maxQuestions', maxQuestions);
-  } else {
-    localStorage.removeItem('maxQuestions');
-  }
 
   if (!baseURL) return setSettingsStatus('Base URL is required.', 'error');
   if (!model) return setSettingsStatus('Model is required.', 'error');
@@ -2775,6 +2807,80 @@ function showProfileStatus(msg, type) {
   el.className = "status-message " + (type || "");
   if (type === "success") el.style.color = "var(--status-done)";
   else if (type === "error") el.style.color = "var(--status-err)";
+}
+/* ── Telegram Gateway Settings ── */
+async function openTelegramModal() {
+  document.getElementById('telegram-modal').classList.add('show');
+  showTelegramStatus('Loading...', '');
+  try {
+    const res = await fetch("/ui/telegram");
+    if (!res.ok) throw new Error("Failed to load settings");
+    const data = await res.json();
+    
+    document.getElementById("telegram-enabled-toggle").checked = data.enabled;
+    const tokenInput = document.getElementById("telegram-bot-token");
+    tokenInput.value = "";
+    if (data.bot_token_set) {
+      tokenInput.placeholder = "Set (" + data.bot_token_masked + ") - leave blank to keep";
+    } else {
+      tokenInput.placeholder = "Enter Bot Token";
+    }
+    document.getElementById("telegram-chat-ids").value = data.allowed_chat_ids || "";
+    showTelegramStatus('', '');
+  } catch (err) {
+    showTelegramStatus("Error loading settings: " + err.message, "error");
+  }
+}
+
+function closeTelegramModal() {
+  document.getElementById('telegram-modal').classList.remove('show');
+  showTelegramStatus('', '');
+}
+
+async function saveTelegramSettings() {
+  const saveBtn = document.getElementById("telegram-save-btn");
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+  showTelegramStatus('', '');
+
+  const payload = {
+    enabled: document.getElementById("telegram-enabled-toggle").checked,
+    bot_token: document.getElementById("telegram-bot-token").value.trim(),
+    allowed_chat_ids: document.getElementById("telegram-chat-ids").value.trim()
+  };
+
+  try {
+    const res = await fetch("/ui/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "Failed to save settings");
+    }
+    
+    showTelegramStatus("Settings saved successfully! Restart 'onyx serve' to apply token changes.", "success");
+    setTimeout(() => {
+      closeTelegramModal();
+    }, 2500);
+  } catch (err) {
+    showTelegramStatus("Error: " + err.message, "error");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save";
+  }
+}
+
+function showTelegramStatus(msg, type) {
+  const el = document.getElementById("telegram-status-msg");
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "status-message " + (type || "");
+  if (type === "success") el.style.color = "var(--status-done)";
+  else if (type === "error") el.style.color = "var(--status-err)";
+  else el.style.color = "var(--text-secondary)";
 }
 </script>
 </body>
