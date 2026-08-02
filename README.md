@@ -1,7 +1,7 @@
 # Onyx Scrapper
 
 > **A self-hosted, fully free AI web agent that searches, browses, and extracts structured data autonomously — no subscriptions, no API markup, no limits.**
-> *Go · go-rod/stealth · Colly · SQLite (FTS5) · SearXNG · TinyFish · Jina Reader · MiMo V2.5 — $0/month, forever.*
+> *Go · go-rod/stealth · Colly · SQLite (FTS5) · SearXNG · TinyFish · Jina Reader · MiMo V2.5-free(opencode zen api key) — $0/month, forever.*
 
 ---
 
@@ -67,7 +67,6 @@
 - **📊 Structured JSON Extraction**: Schema-driven extraction (articles, products, events, custom schemas) via MiMo V2.5.
 - **🤖 ReAct Agent Loop**: Autonomous multi-step agent — plans, navigates, finds elements, types, clicks, extracts — from a plain-English goal.
 - **🧠 Deep Research Mode**: Multi-threaded orchestrator that decomposes a query into sub-questions, spawns parallel worker agents against the full discovery layer, and compiles a cited report. Includes a unified web UI.
-- **📰 News Mode**: Profile-driven news digest — set your fields once (e.g. "AI/ML", "Gaming", "Cricket") in the Web UI, then trigger via CLI, Telegram, scheduler, or HTTP API with a single duration phrase like `past 24h`. Per-field visual separation on every surface; Google News RSS as the keyless primary source. See the [📰 News Mode](#-news-mode) section.
 - **⚖️ Finding Confidence & Reranking**: Optional Jina Reranker pass (free tier, 100 RPM) scores retrieved chunks for relevance before synthesis, and cross-source claims are flagged when confidence disagrees across `findings` rows.
 - **🔍 Local Knowledge Lake (FTS5)**: Embedded SQLite with full-text search across `pages`, `extractions`, `agent_runs`, `agent_steps`, `research_runs`, `research_subquestions`, `findings`.
 - **⏰ Ticker Scheduler Daemon**: Background recurring scraper driven by `schedule.yaml` for unattended monitoring.
@@ -136,30 +135,6 @@ quality:
   source_authority:
     enabled: true
     tiers_config_path: "config/authority_tiers.yaml"
-
-# News mode (Phase 11 guardrails). No API key is required —
-# Google News RSS is the primary headline source and is keyless.
-#   - default_window: applied when /news is sent with no duration
-#     phrase. Accepts any string the recency parser recognises
-#     ("24h", "past week", "yesterday", "this month", ...).
-#   - articles_per_field: how many articles per field get
-#     full-text pulled (the dominant LLM/HTML cost surface).
-#   - min_articles_backfill: if RSS returns fewer than this per
-#     field, the orchestrator cross-checks via SearXNG news +
-#     TinyFish Search before declaring the field "thin".
-#   - max_fields: refuse a /news run whose profile has more
-#     than this many enabled fields. Hard cap 50.
-#   - max_articles_per_field: per-field hard ceiling. The
-#     dominant cost ceiling is still quality.max_extra_calls_per_run.
-#   - items_per_field: display-time cap for rendered items per field.
-#     Default is 10, hard cap is 20.
-news:
-  default_window: 24h
-  articles_per_field: 5
-  min_articles_backfill: 3
-  max_fields: 10
-  max_articles_per_field: 20
-  items_per_field: 10
 ```
 
 ---
@@ -240,13 +215,7 @@ news:
 .\onyx.exe test-fallback https://example.com
 ```
 
-### 13. News Mode (Profile-Driven Digest)
-```bash
-# Run your saved profile with the default window (24h)
-.\onyx.exe news
 
-# Explicit window override — same parser Telegram uses
-.\onyx.exe news --window "past week"
 
 ---
 
