@@ -15,6 +15,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 type Worker struct {
@@ -44,7 +45,8 @@ type extractedClaims struct {
 }
 
 func (w *Worker) reformulateQuery(ctx context.Context, question string) (string, error) {
-	prompt := fmt.Sprintf("The search query \"%s\" yielded no usable results (pages were blocked or empty). Provide a single, simpler or broader alternative search query to find the same information. Return ONLY the query text, nothing else.", question)
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
+	prompt := fmt.Sprintf("The search query \"%s\" yielded no usable results (pages were blocked or empty). Provide a single, simpler or broader alternative search query to find the same information.\n\nToday's date is %s. Use this as the ground truth for what is current — do not rely on your own training knowledge to guess the date or the current state of fast-changing facts. When building a search query about current/latest/recent information, use the actual current year given above, not a year from memory.\n\nReturn ONLY the query text, nothing else.", question, currentDateStr)
 	messages := []llm.Message{
 		{Role: "system", Content: "You are a search query reformulation assistant."},
 		{Role: "user", Content: prompt},
@@ -175,10 +177,12 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 		idx := i
 		chk := chunk
 		extractEg.Go(func() error {
+			currentDateStr := timecontext.Now().Format("January 2, 2006")
 			prompt := fmt.Sprintf(`Extract factual claims from the following text that answer the question: "%s".
+Today's date is %s. Use this as the ground truth for what is current.
 Return a JSON object with a "claims" array containing objects with "claim" (the statement), "source_url" (should be exactly "%s"), and "confidence" (0.0 to 1.0).
 Text:
-%s`, question, selectedURLs[idx], chk)
+%s`, question, currentDateStr, selectedURLs[idx], chk)
 			
 			messages := []llm.Message{
 				{Role: "system", Content: "You are an extraction assistant. Respond strictly with JSON."},

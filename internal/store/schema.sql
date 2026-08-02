@@ -103,3 +103,78 @@ CREATE TABLE IF NOT EXISTS entity_cache (
     created_at DATETIME,
     UNIQUE(entity, version_token)
 );
+
+-- Phase 7: Telegram gateway session linking. Each row joins a single
+-- Telegram chat to a single Onyx run (agent_runs or research_runs).
+-- Kept as a join table rather than a chat_id column on the run tables
+-- so future run types (scheduled runs, crawl runs, etc.) can link to
+-- the same chat without schema churn. run_id is nullable so the
+-- gateway can claim a chat slot *before* the engine allocates a
+-- engine-side row, then back-fill the link once it knows the id.
+CREATE TABLE IF NOT EXISTS telegram_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER NOT NULL,
+    run_type TEXT NOT NULL,           -- 'agent' or 'research'
+    run_id INTEGER,                   -- FK into agent_runs.id or research_runs.id; nullable
+    status TEXT NOT NULL,             -- 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+    goal TEXT,
+    ack_message_id INTEGER,           -- Telegram message_id of the ack reply we are editing for progress
+    last_step INTEGER NOT NULL DEFAULT 0,
+    last_action TEXT,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_sessions_chat ON telegram_sessions(chat_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_telegram_sessions_status ON telegram_sessions(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_sessions_run ON telegram_sessions(run_type, run_id) WHERE run_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS user_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS profile_fields (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    field_name TEXT NOT NULL,
+    keywords_csv TEXT NOT NULL,
+    priority_order INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE,
+    UNIQUE(profile_id, field_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);
+
+CREATE TABLE IF NOT EXISTS news_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    profile_id INTEGER NOT NULL,
+    window TEXT NOT NULL,
+    started_at DATETIME NOT NULL,
+    completed_at DATETIME,
+    status TEXT NOT NULL,
+    FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_runs_profile ON news_runs(profile_id, id DESC);
+
+CREATE TABLE IF NOT EXISTS news_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER NOT NULL,
+    field_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    source TEXT,
+    published_at DATETIME,
+    summary TEXT,
+    fetch_integrity TEXT NOT NULL DEFAULT 'ok',
+    FOREIGN KEY(run_id) REFERENCES news_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY(field_id) REFERENCES profile_fields(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_news_items_run ON news_items(run_id, field_id);
+

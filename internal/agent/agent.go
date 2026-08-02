@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/quality"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 const (
@@ -171,7 +173,10 @@ func (a *Agent) Run(ctx context.Context, goal string, existingRunID int64, cb St
 	browserpkg.ApplyProfile(page, prof)
 
 	// 3. System prompt definition
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
 	systemPrompt := `You are Onyx Scrapper, an autonomous browser agent.
+Today's date is ` + currentDateStr + `. Use this as the ground truth for what is current.
+CRITICAL TIME INSTRUCTION: Your training data cutoff may make you think it is a past year (e.g. 2023 or 2024). Do NOT use past years in your search queries unless the user explicitly asks for historical data. Always append the CURRENT YEAR (` + strconv.Itoa(timecontext.Now().Year()) + `) if you need to search for recent information.
 Your goal is: "` + goal + `"
 
 You must reason step-by-step and respond ONLY with a single JSON object matching this format:
@@ -194,7 +199,7 @@ Available actions and arguments:
 4. click: {"selector": "#id or .class", "description": "optional description if selector unknown"} - Clicks element.
 5. type: {"selector": "#id or .class", "description": "optional description", "text": "text to type", "press_enter": true|false} - Inputs text into field.
 6. extract: {"schema": "product|article|event|search-result-list or custom JSON schema"} - Extracts structured JSON from page.
-7. done: {"result": "The FULL comprehensive final report. You MUST include all actual data, facts, and extracted JSON that fulfills the goal here. DO NOT just output a confirmation."} - Completes execution.`
+7. done: {"result": "The FULL comprehensive final report. CRITICAL: You MUST write the complete, detailed markdown report inside this field. Do NOT just output a confirmation like 'I have gathered insights' or 'The final report is ready'. Include all actual data, facts, and extracted JSON here."} - Completes execution.`
 	
 	if a.subQuestionID > 0 {
 		systemPrompt += `
@@ -207,7 +212,7 @@ Rules:
 - Respond strictly with valid JSON. No markdown code blocks surrounding the JSON unless required, but prefer raw JSON string.
 - Execute actions one step at a time.
 - If an action fails, use alternative strategies.
-- When calling 'done', the 'result' field MUST contain the actual complete data or report requested by the goal, never just a summary of your steps.`
+- When calling 'done', the 'result' field MUST contain the ACTUAL COMPLETE REPORT requested by the goal. Writing summaries or saying 'The report is ready' is a FAILURE.`
 
 	messages := []llm.Message{
 		{Role: "system", Content: systemPrompt},

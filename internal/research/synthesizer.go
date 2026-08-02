@@ -8,6 +8,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 type Synthesizer struct {
@@ -23,8 +24,11 @@ func (s *Synthesizer) Synthesize(ctx context.Context, plan ResearchPlan, finding
 	findingsText := buildFindingsText(findings, s.authManager)
 	outlineText := strings.Join(plan.ReportOutline, "\n- ")
 
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
 	prompt := fmt.Sprintf(`You are the lead synthesizer for a research report.
 Your goal is: "%s"
+
+Today's date is %s. Use this as the ground truth for what is current.
 
 Here is the required report outline:
 - %s
@@ -35,7 +39,7 @@ Here are the findings gathered by your research team:
 Write the final comprehensive markdown report following the outline. 
 IMPORTANT: Every claim you make MUST be inline-cited to its source URL using Markdown links or bracketed numbers. For example: "The library is highly performant [1](https://example.com)." Do not invent facts or citations. Only use the findings provided.
 
-Respond directly with the markdown report content. Do not wrap in JSON.`, plan.Goal, outlineText, findingsText)
+Respond directly with the markdown report content. Do not wrap in JSON.`, plan.Goal, currentDateStr, outlineText, findingsText)
 
 	messages := []llm.Message{
 		{Role: "system", Content: "You are an expert report synthesizer. You output high-quality, cited markdown."},

@@ -3,12 +3,16 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/browser"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 // Registry manages discovery providers for searching and fetching.
@@ -34,6 +38,8 @@ func NewRegistry(searchProviders []SearchProvider, fetchProviders map[string]Fet
 
 // Search fans out to all enabled SearchProviders concurrently, merges results, and dedupes by normalized URL.
 func (r *Registry) Search(ctx context.Context, query string) []SearchResult {
+	query = rewriteStaleYearQuery(query)
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var allResults []SearchResult
@@ -148,4 +154,31 @@ func (r *Registry) Rerank(ctx context.Context, query string, docs []string) ([]R
 		return out, nil
 	}
 	return r.reranker.Rerank(ctx, query, docs)
+}
+
+var (
+	fourDigitYearPattern  = regexp.MustCompile(`\b(20\d{2})\b`)
+	recencyKeywordPattern = regexp.MustCompile(`(?i)\b(latest|current|recent|newest|this year|now)\b`)
+)
+
+func rewriteStaleYearQuery(query string) string {
+	if !recencyKeywordPattern.MatchString(query) {
+		return query
+	}
+	currentYear := timecontext.Now().Year()
+	rewritten := query
+	changed := false
+	matches := fourDigitYearPattern.FindAllString(query, -1)
+	for _, match := range matches {
+		if year, err := strconv.Atoi(match); err == nil {
+			if year < currentYear-1 {
+				rewritten = strings.Replace(rewritten, match, strconv.Itoa(currentYear), 1)
+				changed = true
+			}
+		}
+	}
+	if changed {
+		slog.Info("query_year_corrected", "original", query, "corrected", rewritten)
+	}
+	return rewritten
 }

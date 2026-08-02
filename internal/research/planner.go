@@ -9,6 +9,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 type SubQuestion struct {
@@ -39,8 +40,11 @@ type planResponse struct {
 }
 
 func (p *Planner) Plan(ctx context.Context, goal string) (ResearchPlan, error) {
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
 	prompt := fmt.Sprintf(`You are an expert lead researcher. Your goal is to plan a deep research report for the following topic:
 "%s"
+
+Today's date is %s. Use this as the ground truth for what is current — do not rely on your own training knowledge to guess the date or the current state of fast-changing facts. When building a search query about current/latest/recent information, use the actual current year given above, not a year from memory.
 
 Decompose this goal into 3 to 6 independent sub-questions that can be researched in parallel.
 Also, define a report structure (outline sections) for the final synthesis.
@@ -49,7 +53,7 @@ Respond ONLY with a JSON object in the following format:
 {
   "sub_questions": ["Question 1", "Question 2", ...],
   "report_outline": ["Section 1", "Section 2", ...]
-}`, goal)
+}`, goal, currentDateStr)
 
 	messages := []llm.Message{
 		{Role: "system", Content: "You are a planning agent for a deep research system. Respond strictly with JSON."},
@@ -91,8 +95,11 @@ type reflectionResponse struct {
 func (p *Planner) ReflectAndReplan(ctx context.Context, plan ResearchPlan, allFindings []store.Finding) ([]string, error) {
 	findingsText := buildFindingsText(allFindings, p.authManager)
 
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
 	prompt := fmt.Sprintf(`You are reviewing the findings for the research goal:
 "%s"
+
+Today's date is %s. Use this as the ground truth for what is current — do not rely on your own training knowledge to guess the date or the current state of fast-changing facts.
 
 Current findings:
 %s
@@ -104,7 +111,7 @@ If the coverage is sufficient, return an empty array.
 Respond ONLY with a JSON object in the following format:
 {
   "new_questions": ["New Question 1", ...]
-}`, plan.Goal, findingsText)
+}`, plan.Goal, currentDateStr, findingsText)
 
 	messages := []llm.Message{
 		{Role: "system", Content: "You are a reflection agent for a deep research system. Respond strictly with JSON."},

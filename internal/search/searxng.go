@@ -42,12 +42,21 @@ type searxngResponse struct {
 
 // Search executes a query against SearXNG and returns parsed SearchResult items.
 func (c *SearXNGClient) Search(ctx context.Context, query string) ([]SearchResult, error) {
+	return c.SearchCategory(ctx, query, "")
+}
+
+// SearchCategory executes a query against SearXNG with an optional category (e.g. "news").
+func (c *SearXNGClient) SearchCategory(ctx context.Context, query string, category string) ([]SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return []SearchResult{}, nil
 	}
 
 	endpoint := fmt.Sprintf("%s/search?q=%s&format=json", c.baseURL, url.QueryEscape(query))
+	if category != "" {
+		endpoint += "&categories=" + url.QueryEscape(category)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create searxng request: %w", err)
@@ -83,3 +92,4 @@ func (c *SearXNGClient) Search(ctx context.Context, query string) ([]SearchResul
 
 	return results, nil
 }
+

@@ -68,6 +68,7 @@ func (h *UIHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/settings", h.handleGetSettings)
 	mux.HandleFunc("POST /ui/settings", h.handlePostSettings)
 	mux.HandleFunc("GET /ui/models", h.handleListModels)
+	mux.HandleFunc("GET /ui/profile", h.handleProfilePage)
 }
 
 func (h *UIHandler) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +81,18 @@ func (h *UIHandler) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Template rendering error: %v", err), http.StatusInternalServerError)
 	}
 }
+
+func (h *UIHandler) handleProfilePage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	err := h.templates.ExecuteTemplate(w, "profile.html", nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Template rendering error: %v", err), http.StatusInternalServerError)
+	}
+}
+
 
 func (h *UIHandler) handleHistory(w http.ResponseWriter, r *http.Request) {
 	limit := 50
@@ -109,10 +122,11 @@ type settingsResponse struct {
 	Provider       string   `json:"provider"`
 	BaseURL        string   `json:"base_url"`
 	APIKeyMasked   string   `json:"api_key_masked"`
-	APIKeySet      bool     `json:"api_key_set"`
-	Model          string   `json:"model"`
-	Providers      []providerDTO `json:"providers"`
-	AvailableModels []string `json:"available_models"`
+	APIKeySet       bool          `json:"api_key_set"`
+	Model           string        `json:"model"`
+	SavedModels     []string      `json:"saved_models"`
+	Providers       []providerDTO `json:"providers"`
+	AvailableModels []string      `json:"available_models"`
 }
 
 type providerDTO struct {
@@ -136,6 +150,7 @@ func (h *UIHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		resp.BaseURL = cfg.OpenCodeZen.BaseURL
 		resp.APIKeySet = cfg.OpenCodeZen.APIKey != ""
 		resp.Model = cfg.OpenCodeZen.DefaultModel
+		resp.SavedModels = cfg.OpenCodeZen.SavedModels
 		resp.Provider = matchProviderID(cfg.OpenCodeZen.BaseURL)
 	} else if h.client != nil {
 		baseURL, model, masked := h.client.Snapshot()
@@ -176,10 +191,11 @@ func (h *UIHandler) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type postSettingsRequest struct {
-	Provider string `json:"provider"`
-	BaseURL  string `json:"base_url"`
-	APIKey   string `json:"api_key"` // full key, may be empty to keep existing
-	Model    string `json:"model"`
+	Provider    string   `json:"provider"`
+	BaseURL     string   `json:"base_url"`
+	APIKey      string   `json:"api_key"`
+	Model       string   `json:"model"`
+	SavedModels []string `json:"saved_models"`
 }
 
 func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
@@ -208,6 +224,7 @@ func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg.OpenCodeZen.BaseURL = req.BaseURL
 	cfg.OpenCodeZen.DefaultModel = req.Model
+	cfg.OpenCodeZen.SavedModels = req.SavedModels
 	if strings.TrimSpace(req.APIKey) != "" {
 		cfg.OpenCodeZen.APIKey = strings.TrimSpace(req.APIKey)
 	}
@@ -234,11 +251,12 @@ func (h *UIHandler) handlePostSettings(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"ok":              true,
-		"provider":        matchProviderID(req.BaseURL),
-		"base_url":        req.BaseURL,
-		"model":           req.Model,
-		"api_key_masked":  maskForDisplay(cfg.OpenCodeZen.APIKey),
+		"ok":               true,
+		"provider":         matchProviderID(req.BaseURL),
+		"base_url":         req.BaseURL,
+		"model":            req.Model,
+		"saved_models":     req.SavedModels,
+		"api_key_masked":   maskForDisplay(cfg.OpenCodeZen.APIKey),
 		"available_models": models,
 	})
 }

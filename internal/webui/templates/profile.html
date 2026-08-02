@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx — News Mode Profile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #06080f;
+    --bg-surface: #101420;
+    --bg-surface-hover: #171d2b;
+    --bg-card: rgba(16, 20, 32, 0.75);
+    --border-subtle: #1e2638;
+    --border-lighter: #2c3852;
+    --border-glow: rgba(59, 130, 246, 0.4);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --brand-primary: #3b82f6;
+    --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    --status-done: #34d399;
+    --status-done-bg: rgba(52, 211, 153, 0.15);
+    --status-err: #f87171;
+    --status-err-bg: rgba(248, 113, 113, 0.15);
+    
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Fira Code', ui-monospace, monospace;
+    --sidebar-w: 260px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-primary);
+    background: var(--bg-base);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Sidebar Navigation ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: linear-gradient(180deg, #0b0f19 0%, #060912 60%, #04050a 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+    box-shadow: 6px 0 30px rgba(0, 0, 0, 0.6);
+  }
+
+  .sidebar-header {
+    padding: 20px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 17px;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+  }
+
+  .logo-icon-3d {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+  }
+  .logo-icon-3d svg { width: 18px; height: 18px; color: #ffffff; }
+
+  .nav-section {
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 13.5px;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+  }
+  .nav-item:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .nav-item.active {
+    color: #ffffff;
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+  /* ── Main Content Area ── */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: radial-gradient(circle at 50% 0%, rgba(30, 42, 69, 0.4) 0%, rgba(6, 8, 15, 0.95) 70%);
+    overflow-y: auto;
+    padding: 32px 40px;
+  }
+
+  .page-header {
+    max-width: 900px;
+    margin: 0 auto 28px auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .page-title-group h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .page-title-group p {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  .field-limit-badge {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ── Card & Table ── */
+  .profile-card {
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .card-toolbar {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  .card-toolbar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #ffffff;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-add:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.5);
+  }
+  .btn-add:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .btn-add svg { width: 14px; height: 14px; }
+
+  /* Fields Table */
+  .fields-list {
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 180px;
+  }
+
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(16, 20, 32, 0.9);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .field-row:focus-within {
+    border-color: var(--border-glow);
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+  }
+
+  .reorder-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .btn-order {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-order:hover:not(:disabled) { color: #ffffff; background: rgba(255, 255, 255, 0.1); }
+  .btn-order:disabled { opacity: 0.2; cursor: not-allowed; }
+  .btn-order svg { width: 14px; height: 14px; }
+
+  .order-badge {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    padding: 3px 7px;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .input-group.name-group { flex: 1; max-width: 220px; }
+  .input-group.kw-group { flex: 2; }
+
+  .input-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .text-input {
+    background: #0b0f19;
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .text-input:focus {
+    border-color: var(--brand-primary);
+  }
+  .text-input.invalid {
+    border-color: var(--status-err);
+    background: rgba(248, 113, 113, 0.05);
+  }
+
+  /* Toggle Switch */
+  .toggle-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 0 4px;
+  }
+  .toggle-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+  }
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 38px;
+    height: 22px;
+  }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #1e2638;
+    transition: .2s;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  .slider:before {
+    position: absolute; content: "";
+    height: 14px; width: 14px;
+    left: 3px; bottom: 3px;
+    background-color: #94a3b8;
+    transition: .2s;
+    border-radius: 50%;
+  }
+  input:checked + .slider {
+    background-color: var(--brand-primary);
+  }
+  input:checked + .slider:before {
+    transform: translateX(16px);
+    background-color: #ffffff;
+  }
+
+  .btn-remove {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .btn-remove:hover {
+    color: var(--status-err);
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.2);
+  }
+  .btn-remove svg { width: 16px; height: 16px; }
+
+  /* Empty Fields State */
+  .empty-fields {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13.5px;
+  }
+
+  /* Card Footer */
+  .card-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(0, 0, 0, 0.25);
+  }
+
+  .status-message {
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  .status-message.success { color: var(--status-done); }
+  .status-message.error { color: var(--status-err); }
+
+  .btn-save {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--brand-gradient);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 10px 22px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    transition: all 0.2s;
+  }
+  .btn-save:hover:not(:disabled) {
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+  }
+  .btn-save:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <a href="/ui" class="logo">
+      <div class="logo-icon-3d">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+      </div>
+      <span>Onyx Agent</span>
+    </a>
+  </div>
+
+  <div class="nav-section">
+    <a href="/ui" class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+      <span>Agent Console</span>
+    </a>
+    <a href="/ui/profile" class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span>News Profile</span>
+    </a>
+  </div>
+</div>
+
+<div class="main-content">
+  <div class="page-header">
+    <div class="page-title-group">
+      <h1>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="14 4 14 9 19 9"></polyline></svg>
+        News Mode Profile
+      </h1>
+      <p>Configure the topics and keywords for multi-field news digests (governs <code>/news</code> command & News mode runs).</p>
+    </div>
+    <div class="field-limit-badge" id="limit-badge">0 / 10 Fields</div>
+  </div>
+
+  <div class="profile-card">
+    <div class="card-toolbar">
+      <div class="card-toolbar-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        Profile Topics & Keywords
+      </div>
+      <button class="btn-add" id="btn-add" onclick="addFieldRow()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        <span>Add Topic Field</span>
+      </button>
+    </div>
+
+    <div class="fields-list" id="fields-container">
+      <!-- Rows rendered dynamically -->
+    </div>
+
+    <div class="card-footer">
+      <div class="status-message" id="status-msg"></div>
+      <button class="btn-save" id="btn-save" onclick="saveProfile()">Save Profile Changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAX_FIELDS = 10;
+let fieldsData = [];
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadProfile();
+});
+
+async function loadProfile() {
+  const container = document.getElementById("fields-container");
+  container.innerHTML = '<div class="empty-fields">Loading profile fields...</div>';
+  
+  try {
+    const res = await fetch("/profile");
+    if (!res.ok) throw new Error("Failed to load profile");
+    const data = await res.json();
+    fieldsData = data.fields || [];
+    renderFields();
+  } catch (err) {
+    showStatus("Error loading profile: " + err.message, "error");
+    container.innerHTML = '<div class="empty-fields">Failed to load profile. Make sure the Onyx server is running.</div>';
+  }
+}
+
+function renderFields() {
+  const container = document.getElementById("fields-container");
+  const limitBadge = document.getElementById("limit-badge");
+  const addBtn = document.getElementById("btn-add");
+
+  limitBadge.textContent = `${fieldsData.length} / ${MAX_FIELDS} Fields`;
+  addBtn.disabled = fieldsData.length >= MAX_FIELDS;
+
+  if (fieldsData.length === 0) {
+    container.innerHTML = `
+      <div class="empty-fields">
+        <p>No news fields configured yet.</p>
+        <p style="margin-top:6px; font-size:12.5px;">Click <strong>Add Topic Field</strong> above to define your first topic.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = "";
+  fieldsData.forEach((field, index) => {
+    const row = document.createElement("div");
+    row.className = "field-row";
+    row.dataset.index = index;
+
+    row.innerHTML = `
+      <div class="reorder-controls">
+        <button class="btn-order" onclick="moveField(${index}, -1)" ${index === 0 ? 'disabled' : ''} title="Move Up">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+        </button>
+        <button class="btn-order" onclick="moveField(${index}, 1)" ${index === fieldsData.length - 1 ? 'disabled' : ''} title="Move Down">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+      </div>
+
+      <div class="order-badge">#${index + 1}</div>
+
+      <div class="input-group name-group">
+        <label>Field Name</label>
+        <input type="text" class="text-input field-name-input" value="${escapeHtml(field.field_name || '')}" placeholder="e.g. AI/ML" oninput="updateFieldData(${index}, 'field_name', this.value)" />
+      </div>
+
+      <div class="input-group kw-group">
+        <label>Keywords (CSV)</label>
+        <input type="text" class="text-input field-kw-input" value="${escapeHtml(field.keywords_csv || '')}" placeholder="e.g. LLM, generative AI, ChatGPT" oninput="updateFieldData(${index}, 'keywords_csv', this.value)" />
+      </div>
+
+      <div class="toggle-group">
+        <label>Enabled</label>
+        <label class="switch">
+          <input type="checkbox" ${field.enabled !== false ? 'checked' : ''} onchange="updateFieldData(${index}, 'enabled', this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <button class="btn-remove" onclick="removeField(${index})" title="Delete Field">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+      </button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function updateFieldData(index, key, val) {
+  if (fieldsData[index]) {
+    fieldsData[index][key] = val;
+  }
+}
+
+function addFieldRow() {
+  if (fieldsData.length >= MAX_FIELDS) return;
+  fieldsData.push({
+    field_name: "",
+    keywords_csv: "",
+    priority_order: fieldsData.length + 1,
+    enabled: true
+  });
+  renderFields();
+  const inputs = document.querySelectorAll(".field-name-input");
+  if (inputs.length > 0) inputs[inputs.length - 1].focus();
+}
+
+function removeField(index) {
+  fieldsData.splice(index, 1);
+  renderFields();
+}
+
+function moveField(index, direction) {
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= fieldsData.length) return;
+  const temp = fieldsData[index];
+  fieldsData[index] = fieldsData[targetIndex];
+  fieldsData[targetIndex] = temp;
+  renderFields();
+}
+
+async function saveProfile() {
+  const saveBtn = document.getElementById("btn-save");
+  showStatus("", "");
+
+  // Client side validation
+  const seenNames = new Set();
+  for (let i = 0; i < fieldsData.length; i++) {
+    const f = fieldsData[i];
+    const name = (f.field_name || "").trim();
+    const kw = (f.keywords_csv || "").trim();
+
+    if (!name) {
+      showStatus(`Field #${i + 1}: Name cannot be empty`, "error");
+      highlightInput(i, 'field-name-input');
+      return;
+    }
+
+    const lowerName = name.toLowerCase();
+    if (seenNames.has(lowerName)) {
+      showStatus(`Duplicate field name "${name}" at position #${i + 1}`, "error");
+      highlightInput(i, 'field-name-input');
+      return;
+    }
+    seenNames.add(lowerName);
+
+    if (!kw) {
+      showStatus(`Field #${i + 1} (${name}): Keywords cannot be empty`, "error");
+      highlightInput(i, 'field-kw-input');
+      return;
+    }
+  }
+
+  saveBtn.disabled = true;
+  saveBtn.textContent = "Saving...";
+
+  try {
+    const payload = {
+      fields: fieldsData.map((f, idx) => ({
+        field_name: f.field_name.trim(),
+        keywords_csv: f.keywords_csv.trim(),
+        priority_order: idx + 1,
+        enabled: f.enabled !== false
+      }))
+    };
+
+    const res = await fetch("/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || "Failed to save profile");
+    }
+
+    fieldsData = data.fields || [];
+    renderFields();
+    showStatus("Profile saved successfully!", "success");
+  } catch (err) {
+    showStatus("Error: " + err.message, "error");
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = "Save Profile Changes";
+  }
+}
+
+function highlightInput(index, className) {
+  const rows = document.querySelectorAll(".field-row");
+  if (rows[index]) {
+    const input = rows[index].querySelector("." + className);
+    if (input) {
+      input.classList.add("invalid");
+      input.focus();
+      setTimeout(() => input.classList.remove("invalid"), 3000);
+    }
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById("status-msg");
+  el.textContent = msg;
+  el.className = "status-message " + (type || "");
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+</script>
+</body>
+</html>

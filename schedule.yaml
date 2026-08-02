@@ -12,3 +12,39 @@ jobs:
     interval: "6h"
     render: true
     schema: "product"
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Recurring News Digests
+# ---------------------------------------------------------------------------
+# `news_jobs:` runs a profile-driven news digest on a fixed interval. The
+# profile is configured via the Web UI (/ui/profile); the window is the
+# recency phrase passed to the recency parser. Examples:
+#
+#   window: "past 24h"     ->  when:1d
+#   window: "last 3 days"  ->  when:3d
+#   window: "past week"    ->  when:7d
+#
+# sink "store" persists the digest to `news_runs` + `news_items`; you
+# pull it later via `GET /news/{id}` or the on-disk SQLite store.
+#
+# sink "telegram" delivers the per-field digest to telegram_chat_id
+# using the same chunking the /news command uses. Requires
+# `telegram.enabled: true` AND the chat id must be in
+# `telegram.allowed_chat_ids` — both are validated at schedule.yaml
+# load time (fail-fast, the daemon will not start with a bad config).
+#
+# Minimum interval is 1m to protect Google News RSS from accidental
+# hammer-on. Quality budget (quality.max_extra_calls_per_run) still
+# applies per tick — a recurring job cannot exceed the same per-run
+# call cap a manual /news run respects.
+#
+# Uncomment to enable. The example below uses your operator-default
+# profile and delivers to your configured Telegram chat every 24h.
+#
+# news_jobs:
+#   - name: "Daily AI + Gaming Digest"
+#     interval: "24h"
+#     window: "past 24h"
+#     profile: "default"
+#     sink: "telegram"
+#     telegram_chat_id: 1050305220

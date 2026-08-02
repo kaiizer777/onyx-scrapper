@@ -9,6 +9,7 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 type VerificationResult string
@@ -92,15 +93,18 @@ func (v *SecondSourceVerifier) VerifyClaim(ctx context.Context, claim string) (V
 		return ResultUnclear, "", nil
 	}
 
+	currentDateStr := timecontext.Now().Format("January 2, 2006")
 	prompt := fmt.Sprintf(`Does this second, independent source confirm, contradict, or fail to address this specific claim about %s?
 Claim: "%s"
+
+Today's date is %s. Use this as the ground truth for what is current.
 
 Evidence:
 %s
 
 Answer CONFIRMED, CONTRADICTED, or UNCLEAR with the specific current value if contradicted. Format your response exactly like:
 RESULT: [CONFIRMED/CONTRADICTED/UNCLEAR]
-VALUE: [the current value if contradicted, else blank]`, entity, claim, evidence)
+VALUE: [the current value if contradicted, else blank]`, entity, claim, currentDateStr, evidence)
 
 	messages := []llm.Message{
 		{Role: "system", Content: "You are a fact-checking assistant. Follow instructions exactly."},

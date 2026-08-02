@@ -9,6 +9,7 @@ import (
 
 	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/search"
+	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
 func TestServerPing(t *testing.T) {
@@ -136,3 +137,71 @@ func TestServerFetch(t *testing.T) {
 		t.Errorf("expected clean text to contain 'Hello Onyx API', got: %s", fetchRes.CleanText)
 	}
 }
+
+func TestServerProfile(t *testing.T) {
+	st, err := store.NewStore(":memory:")
+	if err != nil {
+		t.Fatalf("Failed to create in-memory store: %v", err)
+	}
+	defer st.Close()
+
+	srv := NewServer(WithStore(st))
+	ts := httptest.NewServer(srv.httpSrv.Handler)
+	defer ts.Close()
+
+	// 1. GET /profile -> initially default profile with 0 fields
+	respGET, err := http.Get(ts.URL + "/profile")
+	if err != nil {
+		t.Fatalf("GET /profile failed: %v", err)
+	}
+	defer respGET.Body.Close()
+
+	if respGET.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", respGET.StatusCode)
+	}
+
+	var getResult map[string]interface{}
+	if err := json.NewDecoder(respGET.Body).Decode(&getResult); err != nil {
+		t.Fatalf("failed to decode GET /profile JSON: %v", err)
+	}
+	if getResult["profile"] == nil {
+		t.Fatalf("expected profile in JSON response")
+	}
+
+	// 2. POST /profile -> update fields
+	postBody, _ := json.Marshal(map[string]interface{}{
+		"fields": []map[string]interface{}{
+			{
+				"field_name":   "AI/ML",
+				"keywords_csv": "LLM, generative AI",
+				"enabled":      true,
+			},
+			{
+				"field_name":   "Gaming",
+				"keywords_csv": "Unreal Engine, Unity",
+				"enabled":      true,
+			},
+		},
+	})
+
+	respPOST, err := http.Post(ts.URL+"/profile", "application/json", bytes.NewBuffer(postBody))
+	if err != nil {
+		t.Fatalf("POST /profile failed: %v", err)
+	}
+	defer respPOST.Body.Close()
+
+	if respPOST.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on POST /profile, got %d", respPOST.StatusCode)
+	}
+
+	var postResult map[string]interface{}
+	if err := json.NewDecoder(respPOST.Body).Decode(&postResult); err != nil {
+		t.Fatalf("failed to decode POST /profile JSON: %v", err)
+	}
+
+	fields, ok := postResult["fields"].([]interface{})
+	if !ok || len(fields) != 2 {
+		t.Fatalf("expected 2 fields in POST /profile response, got %v", postResult["fields"])
+	}
+}
+

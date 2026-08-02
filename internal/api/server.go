@@ -13,13 +13,17 @@ import (
 	"time"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/agent"
+	"github.com/kaiizer777/onyx-scrapper/internal/config"
 	"github.com/kaiizer777/onyx-scrapper/internal/crawl"
+	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/extract"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/news"
+	"github.com/kaiizer777/onyx-scrapper/internal/profile"
 	"github.com/kaiizer777/onyx-scrapper/internal/research"
+	"github.com/kaiizer777/onyx-scrapper/internal/search"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 	"github.com/kaiizer777/onyx-scrapper/internal/webui"
-	"github.com/kaiizer777/onyx-scrapper/internal/discovery"
 )
 
 // Server represents the Onyx Scrapper local HTTP API server.
@@ -29,6 +33,13 @@ type Server struct {
 	store     *store.Store
 	registry  *discovery.Registry
 	httpSrv   *http.Server
+
+	// telegramWebhook is an optional http.Handler mounted at
+	// /telegram/webhook when the gateway is in webhook mode. It is
+	// set via WithTelegramWebhook and registered into the mux inside
+	// NewServer (not in the option itself, because the mux does not
+	// exist yet at option time).
+	telegramWebhook http.Handler
 
 	activeRunsMu sync.Mutex
 	activeRuns   map[string]context.CancelFunc
@@ -67,6 +78,28 @@ func WithRegistry(registry *discovery.Registry) Option {
 	}
 }
 
+// telegramWebhookPath is the path the Telegram gateway is mounted at
+// when the operator runs the bot in webhook mode on the same process
+// as onyx serve. Centralized so the option below and any future
+// docs/tests reference the same constant.
+const telegramWebhookPath = "/telegram/webhook"
+
+// WithTelegramWebhook mounts an http.Handler at /telegram/webhook on
+// the existing onyx serve mux. This lets a single onyx process run
+// the HTTP API + the Telegram webhook gateway together, sharing the
+// same TLS-terminating reverse proxy in front. Nil handler is a
+// no-op so callers can pass a conditional without a separate check.
+func WithTelegramWebhook(handler http.Handler) Option {
+	return func(s *Server) {
+		if handler == nil {
+			return
+		}
+		// Captured into a field so NewServer can register it after the
+		// mux is built (the mux does not exist when the option runs).
+		s.telegramWebhook = handler
+	}
+}
+
 // NewServer constructs a new HTTP API server.
 func NewServer(opts ...Option) *Server {
 	s := &Server{
@@ -94,13 +127,27 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("/deep-research/{id}", s.corsMiddleware(s.handleDeepResearchDetail))
 	mux.HandleFunc("POST /agent/runs/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
 	mux.HandleFunc("POST /deep-research/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
+	mux.HandleFunc("POST /news", s.corsMiddleware(s.handleNewsPost))
+	mux.HandleFunc("GET /news/{id}", s.corsMiddleware(s.handleNewsRunDetail))
+	mux.HandleFunc("GET /news/{id}/html", s.corsMiddleware(s.handleNewsRunHTML))
+	mux.HandleFunc("POST /news/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
+	mux.HandleFunc("GET /profile", s.corsMiddleware(s.handleGetProfile))
+	mux.HandleFunc("POST /profile", s.corsMiddleware(s.handlePostProfile))
 
 	uiHandler, err := webui.NewUIHandler(s.store, s.client, s.registry)
 	if err == nil {
 		uiHandler.RegisterRoutes(mux)
 	} else {
 		slog.Warn("Failed to initialize Web UI handler", "error", err)
+	}
+
+	// Telegram webhook (opt-in). Mounted AFTER the WebUI routes so
+	// /telegram/webhook is a stable path operators can front with
+	// their reverse proxy without colliding with WebUI prefixes.
+	if s.telegramWebhook != nil {
+		mux.Handle(telegramWebhookPath, s.telegramWebhook)
+		slog.Info("Telegram webhook mounted on serve mux", "path", telegramWebhookPath)
 	}
 
 	// Wrap mux: serve ui.html at root without registering "GET /" in the mux
@@ -376,7 +423,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.MaxSteps <= 0 {
-		req.MaxSteps = 15
+		req.MaxSteps = 35
 	}
 
 	if s.client == nil || s.store == nil {
@@ -416,7 +463,7 @@ func (s *Server) handleAgentAsync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.MaxSteps <= 0 {
-		req.MaxSteps = 15
+		req.MaxSteps = 35
 	}
 	if s.client == nil || s.store == nil {
 		writeError(w, http.StatusServiceUnavailable, "LLM client or Store is not configured on server")
@@ -759,12 +806,14 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
 		return
 	}
-	
+
 	runType := ""
 	if strings.HasPrefix(r.URL.Path, "/agent/") {
 		runType = "agent"
 	} else if strings.HasPrefix(r.URL.Path, "/deep-research/") {
 		runType = "research"
+	} else if strings.HasPrefix(r.URL.Path, "/news/") {
+		runType = "news"
 	} else {
 		writeError(w, http.StatusBadRequest, "unknown run type")
 		return
@@ -791,12 +840,352 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 	}
 	s.activeRunsMu.Unlock()
 
-	if runType == "agent" {
+	switch runType {
+	case "agent":
 		_ = s.store.UpdateAgentRunStatus(runID, "cancelled", "Run cancelled by user")
-	} else {
+	case "research":
 		_ = s.store.UpdateResearchRunStatus(runID, "cancelled", "Run cancelled by user")
+	case "news":
+		_ = s.store.UpdateNewsRunStatus(runID, "cancelled")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
+
+// newsFieldItem is a single news item shaped for the Web UI response.
+type newsFieldItem struct {
+	ID             int64      `json:"id"`
+	Title          string     `json:"title"`
+	URL            string     `json:"url"`
+	Source         string     `json:"source"`
+	PublishedAt    *time.Time `json:"published_at,omitempty"`
+	Summary        string     `json:"summary"`
+	FetchIntegrity string     `json:"fetch_integrity"`
+}
+
+// newsFieldGroup is a per-field section in the digest response.
+type newsFieldGroup struct {
+	FieldID       int64           `json:"field_id"`
+	FieldName     string          `json:"field_name"`
+	PriorityOrder int             `json:"priority_order"`
+	Items         []newsFieldItem `json:"items"`
+}
+
+// newsDetailResponse is the payload returned by GET /news/{id}.
+type newsDetailResponse struct {
+	Run          *store.NewsRun   `json:"run"`
+	ItemsByField []newsFieldGroup `json:"items_by_field"`
+}
+
+type newsRequest struct {
+	Window string `json:"window"` // optional recency phrase
+	Field  string `json:"field"`  // optional single-field debug filter
+}
+
+func (s *Server) handleNewsPost(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.store == nil || s.client == nil {
+		writeError(w, http.StatusServiceUnavailable, "store or LLM client not configured")
+		return
+	}
+
+	var req newsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		req = newsRequest{}
+	}
+
+	cfg, _ := config.LoadConfig("config.yaml")
+	defaultWin := news.DefaultWindow
+	if cfg != nil && cfg.News != nil && cfg.News.DefaultWindow != "" {
+		defaultWin = cfg.News.DefaultWindow
+	}
+	win := news.ParseRecencyWindow(strings.TrimSpace(req.Window), defaultWin)
+
+	profMgr := profile.NewManager(s.store, profile.Config{})
+	prof, err := profMgr.GetOrCreateDefaultProfile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load profile: %v", err))
+		return
+	}
+
+	preRun, err := s.store.CreateNewsRun(prof.ID, win.RawPhrase)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create news run: %v", err))
+		return
+	}
+
+	runID := preRun.ID
+	runKey := fmt.Sprintf("news_%d", runID)
+
+	searxngClient := search.NewSearXNGClient("http://localhost:8080", &http.Client{Timeout: 15 * time.Second})
+	orch := news.NewOrchestrator(s.store, profMgr, s.registry, searxngClient, cfg)
+	orch.SetLLMClient(s.client)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.activeRunsMu.Lock()
+	s.activeRuns[runKey] = cancel
+	s.activeRunsMu.Unlock()
+
+	go func() {
+		defer func() {
+			s.activeRunsMu.Lock()
+			delete(s.activeRuns, runKey)
+			s.activeRunsMu.Unlock()
+		}()
+		_, _, _ = orch.SummarizeAndReturnWithPreCreatedRun(ctx, preRun, win, req.Field)
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"run_id": runID,
+		"status": "running",
+	})
+}
+
+func (s *Server) handleNewsRunDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not configured")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+	runID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid run id")
+		return
+	}
+
+	newsRun, items, err := s.loadNewsRunAndItems(runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if newsRun == nil {
+		writeError(w, http.StatusNotFound, "news run not found")
+		return
+	}
+
+	fieldGroups := s.groupNewsItemsForResponse(items)
+
+	writeJSON(w, http.StatusOK, newsDetailResponse{
+		Run:          newsRun,
+		ItemsByField: fieldGroups,
+	})
+}
+
+// loadNewsRunAndItems is a shared helper used by both the JSON and
+// HTML news-run endpoints. Returns (nil, nil, nil) if the run does
+// not exist; returns a wrapped error on store failure.
+func (s *Server) loadNewsRunAndItems(runID int64) (*store.NewsRun, []store.NewsItem, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("store not configured")
+	}
+	newsRun, err := s.store.GetNewsRun(runID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get news run: %w", err)
+	}
+	if newsRun == nil {
+		return nil, nil, nil
+	}
+	items, err := s.store.GetNewsItemsForRun(runID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get news items: %w", err)
+	}
+	return newsRun, items, nil
+}
+
+// groupNewsItemsForResponse groups the persisted store.NewsItem rows
+// by field_id, enriches each group with field metadata, and returns
+// the JSON-shaped []newsFieldGroup used by the Web UI's existing
+// poll-for-result code path.
+func (s *Server) groupNewsItemsForResponse(items []store.NewsItem) []newsFieldGroup {
+	type fieldMeta struct {
+		name  string
+		order int
+	}
+	fieldCache := map[int64]fieldMeta{}
+	groupOrder := []int64{}
+	groups := map[int64][]newsFieldItem{}
+
+	for _, item := range items {
+		if _, seen := groups[item.FieldID]; !seen {
+			groupOrder = append(groupOrder, item.FieldID)
+			groups[item.FieldID] = []newsFieldItem{}
+			if f, ferr := s.store.GetProfileField(item.FieldID); ferr == nil && f != nil {
+				fieldCache[item.FieldID] = fieldMeta{name: f.FieldName, order: f.PriorityOrder}
+			} else {
+				fieldCache[item.FieldID] = fieldMeta{name: fmt.Sprintf("Field %d", item.FieldID), order: 0}
+			}
+		}
+		groups[item.FieldID] = append(groups[item.FieldID], newsFieldItem{
+			ID:             item.ID,
+			Title:          item.Title,
+			URL:            item.URL,
+			Source:         item.Source,
+			PublishedAt:    item.PublishedAt,
+			Summary:        item.Summary,
+			FetchIntegrity: item.FetchIntegrity,
+		})
+	}
+
+	var fieldGroups []newsFieldGroup
+	for _, fid := range groupOrder {
+		meta := fieldCache[fid]
+		fieldGroups = append(fieldGroups, newsFieldGroup{
+			FieldID:       fid,
+			FieldName:     meta.name,
+			PriorityOrder: meta.order,
+			Items:         groups[fid],
+		})
+	}
+	if fieldGroups == nil {
+		fieldGroups = []newsFieldGroup{}
+	}
+	return fieldGroups
+}
+
+// handleNewsRunHTML returns the post-run Markdown representation
+// of a news digest. The Web UI consumes this through marked.parse()
+// to render the SAME styled "Final Report" card the agent uses —
+// per-field sections as H2 headers, per-article as H3 + paragraphs
+// + a clean source link — so the news section matches the agent's
+// report shape and the operator gets a real readable report, not
+// a dump of raw publisher HTML. Always responds with
+// Content-Type text/markdown (so the existing client code that
+// hits `/news/{id}/html` and runs the body through marked.parse()
+// works unchanged).
+func (s *Server) handleNewsRunHTML(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store not configured")
+		return
+	}
+
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+	runID, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid run id")
+		return
+	}
+
+	newsRun, items, err := s.loadNewsRunAndItems(runID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if newsRun == nil {
+		writeError(w, http.StatusNotFound, "news run not found")
+		return
+	}
+
+	lookup := func(fieldID int64) (string, int, bool) {
+		f, ferr := s.store.GetProfileField(fieldID)
+		if ferr != nil || f == nil {
+			return "", 0, false
+		}
+		return f.FieldName, f.PriorityOrder, true
+	}
+
+	// Honor the operator's configured per-field display cap. The
+	// live orchestrator already enforced the same cap; re-applying
+	// it on the read path means a saved run re-rendered with a
+	// different config.items_per_field still shows the new count.
+	cfg, _ := config.LoadConfig("config.yaml")
+	itemsPerField := cfg.ResolveNewsItemsPerField()
+
+	digest := news.BuildDigestFromStoreItems(newsRun, items, lookup, itemsPerField)
+	mdStr := news.FormatMarkdown(digest)
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	_, _ = w.Write([]byte(mdStr))
+}
+
+func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store is not configured")
+		return
+	}
+
+	mgr := profile.NewManager(s.store, profile.Config{})
+	prof, err := mgr.GetOrCreateDefaultProfile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get default profile: %v", err))
+		return
+	}
+
+	pwf, err := mgr.GetProfileWithFields(prof.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to load profile fields: %v", err))
+		return
+	}
+
+	if pwf.Fields == nil {
+		pwf.Fields = []store.ProfileField{}
+	}
+
+	writeJSON(w, http.StatusOK, pwf)
+}
+
+type postProfileRequest struct {
+	Fields []store.ProfileField `json:"fields"`
+}
+
+func (s *Server) handlePostProfile(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.store == nil {
+		writeError(w, http.StatusServiceUnavailable, "store is not configured")
+		return
+	}
+
+	var req postProfileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	mgr := profile.NewManager(s.store, profile.Config{})
+	prof, err := mgr.GetOrCreateDefaultProfile()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to get default profile: %v", err))
+		return
+	}
+
+	syncedFields, err := mgr.SyncFields(prof.ID, req.Fields)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, profile.ProfileWithFields{
+		Profile: prof,
+		Fields:  syncedFields,
+	})
+}
+
 

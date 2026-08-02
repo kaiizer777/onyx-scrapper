@@ -3,14 +3,17 @@ package store
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
+
 
 //go:embed schema.sql
 var schemaSQL string
@@ -101,13 +104,82 @@ type Finding struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// TelegramSession is the Phase-7 join row that links a Telegram chat to
+// a single Onyx run (agent_runs or research_runs). One row per chat
+// per run; the same chat can have many rows over time. RunID is
+// nullable because the gateway creates the row at "Starting..." time,
+// before the engine allocates a row of its own; the worker back-fills
+// RunID via UpdateTelegramSessionRunID once the engine id is known.
+// The AckMessageID field records the message_id of the ack reply so
+// the gateway can edit it in place to show progress without spamming
+// the chat.
+type TelegramSession struct {
+	ID           int64     `json:"id"`
+	ChatID       int64     `json:"chat_id"`
+	RunType      string    `json:"run_type"`     // "agent" or "research"
+	RunID        *int64    `json:"run_id"`       // FK into agent_runs.id or research_runs.id; nullable
+	Status       string    `json:"status"`       // pending | running | completed | failed | cancelled
+	Goal         string    `json:"goal"`
+	AckMessageID int       `json:"ack_message_id"`
+	LastStep     int       `json:"last_step"`
+	LastAction   string    `json:"last_action"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type UserProfile struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type ProfileField struct {
+	ID            int64     `json:"id"`
+	ProfileID     int64     `json:"profile_id"`
+	FieldName     string    `json:"field_name"`
+	KeywordsCSV   string    `json:"keywords_csv"`
+	PriorityOrder int       `json:"priority_order"`
+	Enabled       bool      `json:"enabled"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+type NewsRun struct {
+	ID          int64      `json:"id"`
+	ProfileID   int64      `json:"profile_id"`
+	Window      string     `json:"window"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	Status      string     `json:"status"`
+}
+
+type NewsItem struct {
+	ID             int64      `json:"id"`
+	RunID          int64      `json:"run_id"`
+	FieldID        int64      `json:"field_id"`
+	Title          string     `json:"title"`
+	URL            string     `json:"url"`
+	Source         string     `json:"source"`
+	PublishedAt    *time.Time `json:"published_at,omitempty"`
+	Summary        string     `json:"summary"`
+	// ShortBody is the LLM-generated 2-3 sentence short body persisted
+	// after the summarization pass. Empty for pre-migration runs; the
+	// render layer falls back to extractProseBody in that case.
+	ShortBody      string     `json:"short_body"`
+	FetchIntegrity string     `json:"fetch_integrity"`
+}
+
+
 type Store struct {
 	db      *sql.DB
 	writeMu sync.Mutex
 }
 
 // NewStore initializes a SQLite database connection, ensuring directories exist and schema is applied.
+
+
 func NewStore(dbPath string) (*Store, error) {
+
 	if dbPath != ":memory:" {
 		dir := filepath.Dir(dbPath)
 		if dir != "." && dir != "" {
@@ -139,6 +211,23 @@ func NewStore(dbPath string) (*Store, error) {
 	db.Exec("ALTER TABLE pages ADD COLUMN source_provider TEXT;")
 	db.Exec("ALTER TABLE pages ADD COLUMN fetch_integrity TEXT NOT NULL DEFAULT 'ok';")
 	db.Exec("CREATE TABLE IF NOT EXISTS run_pages (run_id INTEGER, url TEXT, FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE, UNIQUE(run_id, url));")
+	// Phase 7: Telegram session linking. The schema.sql block already
+	// creates the table for fresh databases; this is the no-op upgrade
+	// path for existing ones. CREATE TABLE IF NOT EXISTS is idempotent.
+	db.Exec("CREATE TABLE IF NOT EXISTS telegram_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, chat_id INTEGER NOT NULL, run_type TEXT NOT NULL, run_id INTEGER, status TEXT NOT NULL, goal TEXT, ack_message_id INTEGER, last_step INTEGER NOT NULL DEFAULT 0, last_action TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_telegram_sessions_chat ON telegram_sessions(chat_id, id DESC);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_telegram_sessions_status ON telegram_sessions(status);")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_sessions_run ON telegram_sessions(run_type, run_id) WHERE run_id IS NOT NULL;")
+
+	// News Mode Profile tables migration
+	db.Exec("CREATE TABLE IF NOT EXISTS user_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);")
+	db.Exec("CREATE TABLE IF NOT EXISTS profile_fields (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL, field_name TEXT NOT NULL, keywords_csv TEXT NOT NULL, priority_order INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE, UNIQUE(profile_id, field_name));")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);")
+
+	// Digest Format v2: persist LLM short body per item so saved-run
+	// re-renders don't need to heuristically extract prose from the full
+	// crawled text. Silently no-ops on existing databases.
+	db.Exec("ALTER TABLE news_items ADD COLUMN short_body TEXT NOT NULL DEFAULT '';")
 
 	return &Store{db: db}, nil
 }
@@ -666,7 +755,11 @@ func (s *Store) GetStats() (Stats, error) {
 	return stats, nil
 }
 
-// GetMergedHistory retrieves a merged and chronologically sorted list of recent agent and research runs.
+// GetMergedHistory retrieves a merged and chronologically sorted list of recent
+// agent, research, and news runs. The sidebar in the /ui page renders all three
+// types (the "type" discriminator tells the front-end which renderer to use);
+// news_runs has no "goal" column, so the union synthesizes a label like
+// "News · 7d" from the run's recency window.
 func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 	if limit <= 0 {
 		limit = 50
@@ -678,6 +771,9 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 			UNION ALL
 			SELECT id, 'research' as type, goal, status, started_at
 			FROM research_runs
+			UNION ALL
+			SELECT id, 'news' as type, ('News · ' || COALESCE(NULLIF(window, ''), 'recent')) as goal, status, started_at
+			FROM news_runs
 		)
 		ORDER BY started_at DESC
 		LIMIT ?;
@@ -730,3 +826,708 @@ func (s *Store) SaveEntityCache(entity, token, result, value string) error {
 	_, err := s.db.Exec(query, entity, token, result, value, now)
 	return err
 }
+
+// CreateTelegramSession inserts a new Phase-7 join row. runID is the
+// engine-side row id (agent_runs.id or research_runs.id) the worker
+// will create or resume; pass nil to create a "pending" row that the
+// worker back-fills via UpdateTelegramSessionRunID. Status starts as
+// "pending" — the caller flips it to "running" once the worker
+// actually starts. Returns the new row id.
+func (s *Store) CreateTelegramSession(chatID int64, runType string, runID *int64, goal string) (int64, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `
+		INSERT INTO telegram_sessions
+			(chat_id, run_type, run_id, status, goal, ack_message_id, last_step, last_action, created_at, updated_at)
+		VALUES (?, ?, ?, 'pending', ?, 0, 0, '', ?, ?)
+		RETURNING id;
+	`
+	var id int64
+	err := s.db.QueryRow(query, chatID, runType, runID, goal, now, now).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create telegram session (chat %d, %s): %w", chatID, runType, err)
+	}
+	return id, nil
+}
+
+// UpdateTelegramSessionRunID back-fills the engine-side row id once
+// the worker has allocated it. Called from the agent / research
+// worker goroutine after Run() returns its AgentRun / ResearchRun.
+func (s *Store) UpdateTelegramSessionRunID(id int64, runID int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `UPDATE telegram_sessions SET run_id = ?, updated_at = ? WHERE id = ?;`
+	if _, err := s.db.Exec(query, runID, now, id); err != nil {
+		return fmt.Errorf("failed to back-fill telegram session %d run_id: %w", id, err)
+	}
+	return nil
+}
+
+// UpdateTelegramSessionStatus is the generic status flip used by the
+// gateway lifecycle. The optional ackMessageID/step/action are only
+// applied when non-zero / non-empty — pass zero values to update only
+// the status.
+func (s *Store) UpdateTelegramSessionStatus(id int64, status string, ackMessageID int, lastStep int, lastAction string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	// We build the SET clause dynamically so callers that only want to
+	// flip status do not clobber the ack_message_id / progress fields.
+	sets := []string{"status = ?", "updated_at = ?"}
+	args := []interface{}{status, now}
+	if ackMessageID > 0 {
+		sets = append(sets, "ack_message_id = ?")
+		args = append(args, ackMessageID)
+	}
+	if lastStep > 0 {
+		sets = append(sets, "last_step = ?")
+		args = append(args, lastStep)
+	}
+	if lastAction != "" {
+		sets = append(sets, "last_action = ?")
+		args = append(args, lastAction)
+	}
+	args = append(args, id)
+	query := "UPDATE telegram_sessions SET " + strings.Join(sets, ", ") + " WHERE id = ?;"
+	if _, err := s.db.Exec(query, args...); err != nil {
+		return fmt.Errorf("failed to update telegram session %d: %w", id, err)
+	}
+	return nil
+}
+
+// UpdateTelegramSessionProgress is the hot path called from the
+// agent/research StepCallback. It updates last_step + last_action in
+// one round-trip; status is left alone. We keep this separate from the
+// generic status updater so the per-step call is a single, narrow SQL
+// statement (cheap on the poller's hot loop).
+func (s *Store) UpdateTelegramSessionProgress(id int64, lastStep int, lastAction string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `UPDATE telegram_sessions SET last_step = ?, last_action = ?, updated_at = ? WHERE id = ?;`
+	if _, err := s.db.Exec(query, lastStep, lastAction, now, id); err != nil {
+		return fmt.Errorf("failed to update telegram session progress (id %d): %w", id, err)
+	}
+	return nil
+}
+
+// GetActiveTelegramSessionCount returns the number of sessions currently in 'running' state.
+func (s *Store) GetActiveTelegramSessionCount() (int, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT count(*) FROM telegram_sessions WHERE status = 'running';`).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count active telegram sessions: %w", err)
+	}
+	return count, nil
+}
+
+// GetLatestTelegramSession returns the most recently created session
+// row for a chat, regardless of status. Used by /status.
+func (s *Store) GetLatestTelegramSession(chatID int64) (*TelegramSession, error) {
+	query := `
+		SELECT id, chat_id, run_type, run_id, status, goal, ack_message_id, last_step, last_action, created_at, updated_at
+		FROM telegram_sessions
+		WHERE chat_id = ?
+		ORDER BY id DESC
+		LIMIT 1;
+	`
+	row := s.db.QueryRow(query, chatID)
+	sess, err := scanTelegramSession(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to load latest telegram session for chat %d: %w", chatID, err)
+	}
+	return sess, nil
+}
+
+// GetTelegramSessionByRun looks up a session row by its (run_type, run_id)
+// key. Returns nil if no link exists (which is normal for runs that
+// were not started from a Telegram chat).
+func (s *Store) GetTelegramSessionByRun(runType string, runID int64) (*TelegramSession, error) {
+	query := `
+		SELECT id, chat_id, run_type, run_id, status, goal, ack_message_id, last_step, last_action, created_at, updated_at
+		FROM telegram_sessions
+		WHERE run_type = ? AND run_id = ?
+		LIMIT 1;
+	`
+	row := s.db.QueryRow(query, runType, runID)
+	sess, err := scanTelegramSession(row)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to load telegram session for %s run %d: %w", runType, runID, err)
+	}
+	return sess, nil
+}
+
+// ListTelegramSessionsForChat returns the N most recent session rows
+// for a chat, newest first. Used by an optional /history command
+// (Phase 7 stretch goal) and for tests.
+func (s *Store) ListTelegramSessionsForChat(chatID int64, limit int) ([]TelegramSession, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	query := `
+		SELECT id, chat_id, run_type, run_id, status, goal, ack_message_id, last_step, last_action, created_at, updated_at
+		FROM telegram_sessions
+		WHERE chat_id = ?
+		ORDER BY id DESC
+		LIMIT ?;
+	`
+	rows, err := s.db.Query(query, chatID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query telegram sessions for chat %d: %w", chatID, err)
+	}
+	defer rows.Close()
+
+	var out []TelegramSession
+	for rows.Next() {
+		sess, err := scanTelegramSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan telegram session: %w", err)
+		}
+		out = append(out, *sess)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating telegram sessions: %w", err)
+	}
+	return out, nil
+}
+
+// scanTelegramSession factors out the NULL-handling for the nullable
+// run_id column. Accepts anything that satisfies Scan(...interface{}).
+func scanTelegramSession(s scanner) (*TelegramSession, error) {
+	var (
+		sess      TelegramSession
+		runIDNull sql.NullInt64
+	)
+	err := s.Scan(&sess.ID, &sess.ChatID, &sess.RunType, &runIDNull, &sess.Status,
+		&sess.Goal, &sess.AckMessageID, &sess.LastStep, &sess.LastAction, &sess.CreatedAt, &sess.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if runIDNull.Valid {
+		v := runIDNull.Int64
+		sess.RunID = &v
+	}
+	return &sess, nil
+}
+
+// scanner is the small interface satisfied by both *sql.Row and
+// *sql.Rows. Letting scanTelegramSession take it lets the same
+// function serve QueryRow and Query paths.
+type scanner interface {
+	Scan(dest ...interface{}) error
+}
+
+// CreateProfile inserts a new user profile record.
+func (s *Store) CreateProfile(name string) (*UserProfile, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `INSERT INTO user_profiles (name, created_at, updated_at) VALUES (?, ?, ?) RETURNING id;`
+	var id int64
+	if err := s.db.QueryRow(query, name, now, now).Scan(&id); err != nil {
+		return nil, fmt.Errorf("failed to create user profile %q: %w", name, err)
+	}
+	return &UserProfile{
+		ID:        id,
+		Name:      name,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil
+}
+
+// GetProfile retrieves a profile by ID.
+func (s *Store) GetProfile(id int64) (*UserProfile, error) {
+	query := `SELECT id, name, created_at, updated_at FROM user_profiles WHERE id = ?;`
+	row := s.db.QueryRow(query, id)
+	var p UserProfile
+	err := row.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get profile %d: %w", id, err)
+	}
+	return &p, nil
+}
+
+// GetProfileByName retrieves a profile by exact name.
+func (s *Store) GetProfileByName(name string) (*UserProfile, error) {
+	query := `SELECT id, name, created_at, updated_at FROM user_profiles WHERE name = ?;`
+	row := s.db.QueryRow(query, name)
+	var p UserProfile
+	err := row.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get profile by name %q: %w", name, err)
+	}
+	return &p, nil
+}
+
+// ListProfiles retrieves all user profiles ordered by ID ASC.
+func (s *Store) ListProfiles() ([]UserProfile, error) {
+	query := `SELECT id, name, created_at, updated_at FROM user_profiles ORDER BY id ASC;`
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list profiles: %w", err)
+	}
+	defer rows.Close()
+
+	var profiles []UserProfile
+	for rows.Next() {
+		var p UserProfile
+		if err := rows.Scan(&p.ID, &p.Name, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan profile: %w", err)
+		}
+		profiles = append(profiles, p)
+	}
+	return profiles, nil
+}
+
+// UpdateProfile renames a user profile.
+func (s *Store) UpdateProfile(id int64, name string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `UPDATE user_profiles SET name = ?, updated_at = ? WHERE id = ?;`
+	res, err := s.db.Exec(query, name, now, id)
+	if err != nil {
+		return fmt.Errorf("failed to update profile %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("profile %d not found", id)
+	}
+	return nil
+}
+
+// DeleteProfile deletes a profile and cascades delete to profile_fields.
+func (s *Store) DeleteProfile(id int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	res, err := s.db.Exec(`DELETE FROM user_profiles WHERE id = ?;`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete profile %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("profile %d not found", id)
+	}
+	return nil
+}
+
+// CreateProfileField creates a new profile field under a profile.
+func (s *Store) CreateProfileField(field ProfileField) (*ProfileField, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	enabledInt := 0
+	if field.Enabled {
+		enabledInt = 1
+	}
+
+	query := `
+		INSERT INTO profile_fields (profile_id, field_name, keywords_csv, priority_order, enabled, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		RETURNING id;
+	`
+	var id int64
+	err := s.db.QueryRow(query, field.ProfileID, field.FieldName, field.KeywordsCSV, field.PriorityOrder, enabledInt, now).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create profile field %q for profile %d: %w", field.FieldName, field.ProfileID, err)
+	}
+
+	field.ID = id
+	field.CreatedAt = now
+	return &field, nil
+}
+
+// GetProfileField retrieves a single profile field by ID.
+func (s *Store) GetProfileField(id int64) (*ProfileField, error) {
+	query := `SELECT id, profile_id, field_name, keywords_csv, priority_order, enabled, created_at FROM profile_fields WHERE id = ?;`
+	row := s.db.QueryRow(query, id)
+	var f ProfileField
+	var enabledInt int
+	err := row.Scan(&f.ID, &f.ProfileID, &f.FieldName, &f.KeywordsCSV, &f.PriorityOrder, &enabledInt, &f.CreatedAt)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get profile field %d: %w", id, err)
+	}
+	f.Enabled = (enabledInt != 0)
+	return &f, nil
+}
+
+// UpdateProfileField updates an existing profile field.
+func (s *Store) UpdateProfileField(field ProfileField) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	enabledInt := 0
+	if field.Enabled {
+		enabledInt = 1
+	}
+
+	query := `
+		UPDATE profile_fields
+		SET field_name = ?, keywords_csv = ?, priority_order = ?, enabled = ?
+		WHERE id = ?;
+	`
+	res, err := s.db.Exec(query, field.FieldName, field.KeywordsCSV, field.PriorityOrder, enabledInt, field.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update profile field %d: %w", field.ID, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("profile field %d not found", field.ID)
+	}
+	return nil
+}
+
+// DeleteProfileField deletes a profile field by ID.
+func (s *Store) DeleteProfileField(id int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	res, err := s.db.Exec(`DELETE FROM profile_fields WHERE id = ?;`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete profile field %d: %w", id, err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("profile field %d not found", id)
+	}
+	return nil
+}
+
+// ListProfileFields retrieves all fields for a profile ordered by priority_order ASC, id ASC.
+func (s *Store) ListProfileFields(profileID int64) ([]ProfileField, error) {
+	query := `
+		SELECT id, profile_id, field_name, keywords_csv, priority_order, enabled, created_at
+		FROM profile_fields
+		WHERE profile_id = ?
+		ORDER BY priority_order ASC, id ASC;
+	`
+	rows, err := s.db.Query(query, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list profile fields for profile %d: %w", profileID, err)
+	}
+	defer rows.Close()
+
+	var fields []ProfileField
+	for rows.Next() {
+		var f ProfileField
+		var enabledInt int
+		if err := rows.Scan(&f.ID, &f.ProfileID, &f.FieldName, &f.KeywordsCSV, &f.PriorityOrder, &enabledInt, &f.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan profile field: %w", err)
+		}
+		f.Enabled = (enabledInt != 0)
+		fields = append(fields, f)
+	}
+	return fields, nil
+}
+
+// ReplaceProfileFields replaces all fields for a profile in a single transaction.
+func (s *Store) ReplaceProfileFields(profileID int64, fields []ProfileField) ([]ProfileField, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin tx for ReplaceProfileFields: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM profile_fields WHERE profile_id = ?;`, profileID); err != nil {
+		return nil, fmt.Errorf("failed to clear profile fields: %w", err)
+	}
+
+	now := time.Now().UTC()
+	var result []ProfileField
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO profile_fields (profile_id, field_name, keywords_csv, priority_order, enabled, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+		RETURNING id;
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare insert stmt: %w", err)
+	}
+	defer stmt.Close()
+
+	for i, f := range fields {
+		enabledInt := 0
+		if f.Enabled {
+			enabledInt = 1
+		}
+		pOrder := f.PriorityOrder
+		if pOrder == 0 {
+			pOrder = i + 1
+		}
+
+		var id int64
+		if err := stmt.QueryRow(profileID, f.FieldName, f.KeywordsCSV, pOrder, enabledInt, now).Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to insert profile field %q: %w", f.FieldName, err)
+		}
+
+		f.ID = id
+		f.ProfileID = profileID
+		f.PriorityOrder = pOrder
+		f.CreatedAt = now
+		result = append(result, f)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit ReplaceProfileFields tx: %w", err)
+	}
+
+	return result, nil
+}
+
+// ListEnabledProfileFields retrieves enabled fields for a profile ordered by priority_order ASC, id ASC.
+func (s *Store) ListEnabledProfileFields(profileID int64) ([]ProfileField, error) {
+	query := `
+		SELECT id, profile_id, field_name, keywords_csv, priority_order, enabled, created_at
+		FROM profile_fields
+		WHERE profile_id = ? AND enabled = 1
+		ORDER BY priority_order ASC, id ASC;
+	`
+	rows, err := s.db.Query(query, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list enabled profile fields for profile %d: %w", profileID, err)
+	}
+	defer rows.Close()
+
+	var fields []ProfileField
+	for rows.Next() {
+		var f ProfileField
+		var enabledInt int
+		if err := rows.Scan(&f.ID, &f.ProfileID, &f.FieldName, &f.KeywordsCSV, &f.PriorityOrder, &enabledInt, &f.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan profile field: %w", err)
+		}
+		f.Enabled = (enabledInt != 0)
+		fields = append(fields, f)
+	}
+	return fields, nil
+}
+
+// CountProfileFields returns the total number of fields configured for a profile.
+func (s *Store) CountProfileFields(profileID int64) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM profile_fields WHERE profile_id = ?;`
+	if err := s.db.QueryRow(query, profileID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count profile fields for profile %d: %w", profileID, err)
+	}
+	return count, nil
+}
+
+// CreateNewsRun creates a new news run record in SQLite.
+func (s *Store) CreateNewsRun(profileID int64, window string) (*NewsRun, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `INSERT INTO news_runs (profile_id, window, started_at, status) VALUES (?, ?, ?, ?)`
+	res, err := s.db.Exec(query, profileID, window, now, "running")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create news run: %w", err)
+	}
+
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last insert id for news run: %w", err)
+	}
+
+	return &NewsRun{
+		ID:        id,
+		ProfileID: profileID,
+		Window:    window,
+		StartedAt: now,
+		Status:    "running",
+	}, nil
+}
+
+// UpdateNewsRunStatus updates the status of a news run.
+func (s *Store) UpdateNewsRunStatus(runID int64, status string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	query := `UPDATE news_runs SET status = ? WHERE id = ?`
+	_, err := s.db.Exec(query, status, runID)
+	if err != nil {
+		return fmt.Errorf("failed to update news run status for run %d: %w", runID, err)
+	}
+	return nil
+}
+
+// CompleteNewsRun marks a news run as completed or failed and sets completed_at.
+func (s *Store) CompleteNewsRun(runID int64, status string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := time.Now().UTC()
+	query := `UPDATE news_runs SET status = ?, completed_at = ? WHERE id = ?`
+	_, err := s.db.Exec(query, status, now, runID)
+	if err != nil {
+		return fmt.Errorf("failed to complete news run %d: %w", runID, err)
+	}
+	return nil
+}
+
+// GetNewsRun retrieves a news run by ID.
+func (s *Store) GetNewsRun(runID int64) (*NewsRun, error) {
+	query := `SELECT id, profile_id, window, started_at, completed_at, status FROM news_runs WHERE id = ?`
+	var r NewsRun
+	var completedAt sql.NullTime
+	err := s.db.QueryRow(query, runID).Scan(&r.ID, &r.ProfileID, &r.Window, &r.StartedAt, &completedAt, &r.Status)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to scan news run %d: %w", runID, err)
+	}
+	if completedAt.Valid {
+		r.CompletedAt = &completedAt.Time
+	}
+	return &r, nil
+}
+
+// CreateNewsItems inserts a slice of news items into SQLite within a single transaction.
+func (s *Store) CreateNewsItems(items []NewsItem) ([]NewsItem, error) {
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin tx for news items: %w", err)
+	}
+	defer tx.Rollback()
+
+	stmt, err := tx.Prepare(`
+		INSERT INTO news_items (run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare insert news item statement: %w", err)
+	}
+	defer stmt.Close()
+
+	var inserted []NewsItem
+	for _, item := range items {
+		var pubTime sql.NullTime
+		if item.PublishedAt != nil {
+			pubTime = sql.NullTime{Time: *item.PublishedAt, Valid: true}
+		}
+		if item.FetchIntegrity == "" {
+			item.FetchIntegrity = "ok"
+		}
+
+		res, err := stmt.Exec(item.RunID, item.FieldID, item.Title, item.URL, item.Source, pubTime, item.Summary, item.ShortBody, item.FetchIntegrity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to insert news item (%s): %w", item.URL, err)
+		}
+		id, _ := res.LastInsertId()
+		item.ID = id
+		inserted = append(inserted, item)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit news items tx: %w", err)
+	}
+
+	return inserted, nil
+}
+
+// GetNewsItemsForRun retrieves all news items associated with a news run.
+func (s *Store) GetNewsItemsForRun(runID int64) ([]NewsItem, error) {
+	query := `
+		SELECT id, run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity
+		FROM news_items
+		WHERE run_id = ?
+		ORDER BY field_id ASC, id ASC;
+	`
+	rows, err := s.db.Query(query, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query news items for run %d: %w", runID, err)
+	}
+	defer rows.Close()
+
+	var items []NewsItem
+	for rows.Next() {
+		var item NewsItem
+		var pubTime sql.NullTime
+		if err := rows.Scan(&item.ID, &item.RunID, &item.FieldID, &item.Title, &item.URL, &item.Source, &pubTime, &item.Summary, &item.ShortBody, &item.FetchIntegrity); err != nil {
+			return nil, fmt.Errorf("failed to scan news item: %w", err)
+		}
+		if pubTime.Valid {
+			item.PublishedAt = &pubTime.Time
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// GetNewsItemsForField retrieves news items for a specific run and field ID.
+func (s *Store) GetNewsItemsForField(runID int64, fieldID int64) ([]NewsItem, error) {
+	query := `
+		SELECT id, run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity
+		FROM news_items
+		WHERE run_id = ? AND field_id = ?
+		ORDER BY id ASC;
+	`
+	rows, err := s.db.Query(query, runID, fieldID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query news items for run %d field %d: %w", runID, fieldID, err)
+	}
+	defer rows.Close()
+
+	var items []NewsItem
+	for rows.Next() {
+		var item NewsItem
+		var pubTime sql.NullTime
+		if err := rows.Scan(&item.ID, &item.RunID, &item.FieldID, &item.Title, &item.URL, &item.Source, &pubTime, &item.Summary, &item.ShortBody, &item.FetchIntegrity); err != nil {
+			return nil, fmt.Errorf("failed to scan news item: %w", err)
+		}
+		if pubTime.Valid {
+			item.PublishedAt = &pubTime.Time
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+// UpdateNewsItemShortBody persists the LLM-generated short body for a
+// single news item so that saved-run re-renders can use it directly
+// instead of the heuristic extractProseBody fallback.
+func (s *Store) UpdateNewsItemShortBody(itemID int64, shortBody string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	_, err := s.db.Exec(`UPDATE news_items SET short_body = ? WHERE id = ?`, shortBody, itemID)
+	if err != nil {
+		return fmt.Errorf("failed to update short_body for item %d: %w", itemID, err)
+	}
+	return nil
+}
+

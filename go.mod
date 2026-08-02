@@ -6,6 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.12.0
 	github.com/go-rod/rod v0.116.2
 	github.com/go-rod/stealth v0.4.9
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/gocolly/colly/v2 v2.3.0
 	github.com/temoto/robotstxt v1.1.2
 	github.com/yuin/goldmark v1.8.5
