@@ -151,12 +151,15 @@ quality:
 #     than this many enabled fields. Hard cap 50.
 #   - max_articles_per_field: per-field hard ceiling. The
 #     dominant cost ceiling is still quality.max_extra_calls_per_run.
+#   - items_per_field: display-time cap for rendered items per field.
+#     Default is 10, hard cap is 20.
 news:
   default_window: 24h
   articles_per_field: 5
   min_articles_backfill: 3
   max_fields: 10
   max_articles_per_field: 20
+  items_per_field: 10
 ```
 
 ---
@@ -397,12 +400,14 @@ News Mode reuses the existing discovery layer — no new paid dependencies. The 
 
 Full-article body pull (Jina Reader / Colly fallback chain) is only invoked for the top `news.articles_per_field` items per field (default 5) — the orchestrator does not fetch every headline's body.
 
-### Per-field visual separation
+### Per-field visual separation (AI/ML Audit Fixture Shape)
 
-The digest is rendered as a strict list of **{field, items[]}** sections, in profile priority order. The renderer is shared across surfaces, with surface-appropriate styling:
+The digest is rendered in a clean, prose-based "AI/ML Audit Fixture" shape, free of publisher navigation and sidebar clickbait. It is formatted as a strict list of **{field, items[]}** sections in profile priority order. The renderer is shared across surfaces, with surface-appropriate styling:
 
+- **Shape:** `#N SOURCE — Title` (hyperlinked), followed by a 2-3 sentence LLM-generated prose summary.
+- **Strict Recency Cutoff:** Only articles published strictly within the `--window` are included. A hard cutoff is enforced by the orchestrator.
 - **CLI** — `━━━` divider + bold field header per section.
-- **Web UI** — each field in its own card with distinct background, border, and spacing. The mode picker adds "News" as a 4th option next to Agent and Deep Research; the input box is labelled "Recency window" (e.g. `past 24h`), not "topic".
+- **Web UI** — each field in its own card with distinct background, border, and spacing.
 - **Telegram** — bold field header + `━━━` divider line per section, HTML parse mode. Per-field chunking uses the existing 4096-char splitter. `/cancel` cancels an in-flight run via the same `CancelFunc` mechanism `/agent` and `/research` use.
 
 Two fields are never merged into a shared list under one header.
