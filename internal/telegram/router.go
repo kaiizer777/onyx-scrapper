@@ -155,7 +155,7 @@ func NewRouter(bot *Bot, cfg *BotConfig, opts ...RouterOption) *Router {
 	if r.defaultMode == "" {
 		r.defaultMode = "agent"
 	}
-	if r.defaultMode != "agent" && r.defaultMode != "deep-research" && r.defaultMode != "news" {
+	if r.defaultMode != "agent" && r.defaultMode != "deep-research" {
 		slog.Warn("telegram.router.invalid_default_mode",
 			slog.String("got", cfg.DefaultMode),
 			slog.String("fallback", "agent"),
@@ -187,7 +187,7 @@ func NewRouter(bot *Bot, cfg *BotConfig, opts ...RouterOption) *Router {
 	r.commandHandlers["fetch"] = stub
 	r.commandHandlers["extract"] = stub
 	r.commandHandlers["search"] = stub
-	r.commandHandlers["news"] = stub
+
 
 	for _, opt := range opts {
 		opt(r)
@@ -236,12 +236,12 @@ func (r *Router) Handle(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi
 		}
 		// The config's default_mode uses human-readable aliases;
 		// internally "deep-research" maps to the "research" slash-command
-		// verb. "news" maps directly (same string). Resolve once.
+		// verb. Resolve once.
 		defaultVerb := r.defaultMode
 		if defaultVerb == "deep-research" {
 			defaultVerb = "research"
 		}
-		// "news" needs no alias — the handler is registered under that key.
+
 		h, exists := r.commandHandlers[defaultVerb]
 		if !exists {
 			return reply(bot, msg.Chat.ID, fmt.Sprintf("default mode %q is not wired in this build", r.defaultMode))

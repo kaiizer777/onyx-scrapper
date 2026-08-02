@@ -2,7 +2,7 @@ package telegram
 
 import (
 	"context"
-	"strings"
+
 	"sync/atomic"
 	"testing"
 
@@ -355,79 +355,4 @@ func TestRouter_DefenseCheck_DropsChatRemovedFromAllowlist(t *testing.T) {
 	// Should be denied by defense even though the mock does not validate.
 	_ = router.Handle(context.Background(), bot.API, msg)
 }
-
-// ---------- Phase 8: /news router tests ----------
-
-func TestNewRouter_NewsDefaultModeAccepted(t *testing.T) {
-	r := NewRouter(nil, &BotConfig{DefaultMode: "news"})
-	if got := r.DefaultMode(); got != "news" {
-		t.Fatalf("default mode = %q, want news", got)
-	}
-}
-
-func TestNewRouter_NewsStubRegistered(t *testing.T) {
-	r := NewRouter(nil, &BotConfig{})
-	if _, ok := r.commandHandlers["news"]; !ok {
-		t.Error("expected 'news' to be registered as a stub in NewRouter")
-	}
-}
-
-func TestHelpText_ContainsNews(t *testing.T) {
-	r := NewRouter(nil, &BotConfig{})
-	help := r.Help()
-	if !strings.Contains(help, "/news") {
-		t.Errorf("default help text does not mention /news; got:\n%s", help)
-	}
-	if !strings.Contains(help, "duration") {
-		t.Errorf("default help text does not mention duration for /news; got:\n%s", help)
-	}
-}
-
-func TestRouter_SlashNewsRoutes(t *testing.T) {
-	var gotVerb string
-	var gotPayload string
-	handler := func(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message, payload string) error {
-		gotVerb = "news"
-		gotPayload = payload
-		return nil
-	}
-	r := NewRouter(nil, &BotConfig{}, WithCommandHandler("news", handler))
-
-	verb, payload, ok := ParseCommand("/news past 3 days")
-	if !ok {
-		t.Fatal("ParseCommand did not recognise /news")
-	}
-	if verb != "news" {
-		t.Fatalf("verb = %q, want news", verb)
-	}
-	if payload != "past 3 days" {
-		t.Fatalf("payload = %q, want 'past 3 days'", payload)
-	}
-
-	// Simulate Handle routing.
-	h, exists := r.commandHandlers[verb]
-	if !exists {
-		t.Fatal("router has no handler for 'news'")
-	}
-	_ = h(context.Background(), nil, &tgbotapi.Message{Chat: &tgbotapi.Chat{ID: 1}}, payload)
-
-	if gotVerb != "news" {
-		t.Errorf("expected news handler to be called, got verb=%q", gotVerb)
-	}
-	if gotPayload != "past 3 days" {
-		t.Errorf("payload = %q, want 'past 3 days'", gotPayload)
-	}
-}
-
-func TestRouter_SlashNewsEmptyPayload(t *testing.T) {
-	// /news with no payload must route correctly (no payload required).
-	verb, payload, ok := ParseCommand("/news")
-	if !ok || verb != "news" {
-		t.Fatalf("ParseCommand('/news') = (%q, %q, %v), want (news, '', true)", verb, payload, ok)
-	}
-	if payload != "" {
-		t.Errorf("payload = %q, want empty", payload)
-	}
-}
-
 

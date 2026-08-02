@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	_ "embed"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -144,30 +143,6 @@ type ProfileField struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-type NewsRun struct {
-	ID          int64      `json:"id"`
-	ProfileID   int64      `json:"profile_id"`
-	Window      string     `json:"window"`
-	StartedAt   time.Time  `json:"started_at"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	Status      string     `json:"status"`
-}
-
-type NewsItem struct {
-	ID             int64      `json:"id"`
-	RunID          int64      `json:"run_id"`
-	FieldID        int64      `json:"field_id"`
-	Title          string     `json:"title"`
-	URL            string     `json:"url"`
-	Source         string     `json:"source"`
-	PublishedAt    *time.Time `json:"published_at,omitempty"`
-	Summary        string     `json:"summary"`
-	// ShortBody is the LLM-generated 2-3 sentence short body persisted
-	// after the summarization pass. Empty for pre-migration runs; the
-	// render layer falls back to extractProseBody in that case.
-	ShortBody      string     `json:"short_body"`
-	FetchIntegrity string     `json:"fetch_integrity"`
-}
 
 
 type Store struct {
@@ -224,10 +199,6 @@ func NewStore(dbPath string) (*Store, error) {
 	db.Exec("CREATE TABLE IF NOT EXISTS profile_fields (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL, field_name TEXT NOT NULL, keywords_csv TEXT NOT NULL, priority_order INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE, UNIQUE(profile_id, field_name));")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);")
 
-	// Digest Format v2: persist LLM short body per item so saved-run
-	// re-renders don't need to heuristically extract prose from the full
-	// crawled text. Silently no-ops on existing databases.
-	db.Exec("ALTER TABLE news_items ADD COLUMN short_body TEXT NOT NULL DEFAULT '';")
 
 	return &Store{db: db}, nil
 }
@@ -756,10 +727,8 @@ func (s *Store) GetStats() (Stats, error) {
 }
 
 // GetMergedHistory retrieves a merged and chronologically sorted list of recent
-// agent, research, and news runs. The sidebar in the /ui page renders all three
-// types (the "type" discriminator tells the front-end which renderer to use);
-// news_runs has no "goal" column, so the union synthesizes a label like
-// "News · 7d" from the run's recency window.
+// agent and research runs. The sidebar in the /ui page renders both
+// types (the "type" discriminator tells the front-end which renderer to use).
 func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 	if limit <= 0 {
 		limit = 50
@@ -771,9 +740,6 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 			UNION ALL
 			SELECT id, 'research' as type, goal, status, started_at
 			FROM research_runs
-			UNION ALL
-			SELECT id, 'news' as type, ('News · ' || COALESCE(NULLIF(window, ''), 'recent')) as goal, status, started_at
-			FROM news_runs
 		)
 		ORDER BY started_at DESC
 		LIMIT ?;
@@ -1338,196 +1304,3 @@ func (s *Store) CountProfileFields(profileID int64) (int, error) {
 	}
 	return count, nil
 }
-
-// CreateNewsRun creates a new news run record in SQLite.
-func (s *Store) CreateNewsRun(profileID int64, window string) (*NewsRun, error) {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	now := time.Now().UTC()
-	query := `INSERT INTO news_runs (profile_id, window, started_at, status) VALUES (?, ?, ?, ?)`
-	res, err := s.db.Exec(query, profileID, window, now, "running")
-	if err != nil {
-		return nil, fmt.Errorf("failed to create news run: %w", err)
-	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last insert id for news run: %w", err)
-	}
-
-	return &NewsRun{
-		ID:        id,
-		ProfileID: profileID,
-		Window:    window,
-		StartedAt: now,
-		Status:    "running",
-	}, nil
-}
-
-// UpdateNewsRunStatus updates the status of a news run.
-func (s *Store) UpdateNewsRunStatus(runID int64, status string) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	query := `UPDATE news_runs SET status = ? WHERE id = ?`
-	_, err := s.db.Exec(query, status, runID)
-	if err != nil {
-		return fmt.Errorf("failed to update news run status for run %d: %w", runID, err)
-	}
-	return nil
-}
-
-// CompleteNewsRun marks a news run as completed or failed and sets completed_at.
-func (s *Store) CompleteNewsRun(runID int64, status string) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	now := time.Now().UTC()
-	query := `UPDATE news_runs SET status = ?, completed_at = ? WHERE id = ?`
-	_, err := s.db.Exec(query, status, now, runID)
-	if err != nil {
-		return fmt.Errorf("failed to complete news run %d: %w", runID, err)
-	}
-	return nil
-}
-
-// GetNewsRun retrieves a news run by ID.
-func (s *Store) GetNewsRun(runID int64) (*NewsRun, error) {
-	query := `SELECT id, profile_id, window, started_at, completed_at, status FROM news_runs WHERE id = ?`
-	var r NewsRun
-	var completedAt sql.NullTime
-	err := s.db.QueryRow(query, runID).Scan(&r.ID, &r.ProfileID, &r.Window, &r.StartedAt, &completedAt, &r.Status)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to scan news run %d: %w", runID, err)
-	}
-	if completedAt.Valid {
-		r.CompletedAt = &completedAt.Time
-	}
-	return &r, nil
-}
-
-// CreateNewsItems inserts a slice of news items into SQLite within a single transaction.
-func (s *Store) CreateNewsItems(items []NewsItem) ([]NewsItem, error) {
-	if len(items) == 0 {
-		return nil, nil
-	}
-
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-
-	tx, err := s.db.Begin()
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin tx for news items: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.Prepare(`
-		INSERT INTO news_items (run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to prepare insert news item statement: %w", err)
-	}
-	defer stmt.Close()
-
-	var inserted []NewsItem
-	for _, item := range items {
-		var pubTime sql.NullTime
-		if item.PublishedAt != nil {
-			pubTime = sql.NullTime{Time: *item.PublishedAt, Valid: true}
-		}
-		if item.FetchIntegrity == "" {
-			item.FetchIntegrity = "ok"
-		}
-
-		res, err := stmt.Exec(item.RunID, item.FieldID, item.Title, item.URL, item.Source, pubTime, item.Summary, item.ShortBody, item.FetchIntegrity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to insert news item (%s): %w", item.URL, err)
-		}
-		id, _ := res.LastInsertId()
-		item.ID = id
-		inserted = append(inserted, item)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit news items tx: %w", err)
-	}
-
-	return inserted, nil
-}
-
-// GetNewsItemsForRun retrieves all news items associated with a news run.
-func (s *Store) GetNewsItemsForRun(runID int64) ([]NewsItem, error) {
-	query := `
-		SELECT id, run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity
-		FROM news_items
-		WHERE run_id = ?
-		ORDER BY field_id ASC, id ASC;
-	`
-	rows, err := s.db.Query(query, runID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query news items for run %d: %w", runID, err)
-	}
-	defer rows.Close()
-
-	var items []NewsItem
-	for rows.Next() {
-		var item NewsItem
-		var pubTime sql.NullTime
-		if err := rows.Scan(&item.ID, &item.RunID, &item.FieldID, &item.Title, &item.URL, &item.Source, &pubTime, &item.Summary, &item.ShortBody, &item.FetchIntegrity); err != nil {
-			return nil, fmt.Errorf("failed to scan news item: %w", err)
-		}
-		if pubTime.Valid {
-			item.PublishedAt = &pubTime.Time
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
-
-// GetNewsItemsForField retrieves news items for a specific run and field ID.
-func (s *Store) GetNewsItemsForField(runID int64, fieldID int64) ([]NewsItem, error) {
-	query := `
-		SELECT id, run_id, field_id, title, url, source, published_at, summary, short_body, fetch_integrity
-		FROM news_items
-		WHERE run_id = ? AND field_id = ?
-		ORDER BY id ASC;
-	`
-	rows, err := s.db.Query(query, runID, fieldID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query news items for run %d field %d: %w", runID, fieldID, err)
-	}
-	defer rows.Close()
-
-	var items []NewsItem
-	for rows.Next() {
-		var item NewsItem
-		var pubTime sql.NullTime
-		if err := rows.Scan(&item.ID, &item.RunID, &item.FieldID, &item.Title, &item.URL, &item.Source, &pubTime, &item.Summary, &item.ShortBody, &item.FetchIntegrity); err != nil {
-			return nil, fmt.Errorf("failed to scan news item: %w", err)
-		}
-		if pubTime.Valid {
-			item.PublishedAt = &pubTime.Time
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
-
-// UpdateNewsItemShortBody persists the LLM-generated short body for a
-// single news item so that saved-run re-renders can use it directly
-// instead of the heuristic extractProseBody fallback.
-func (s *Store) UpdateNewsItemShortBody(itemID int64, shortBody string) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	_, err := s.db.Exec(`UPDATE news_items SET short_body = ? WHERE id = ?`, shortBody, itemID)
-	if err != nil {
-		return fmt.Errorf("failed to update short_body for item %d: %w", itemID, err)
-	}
-	return nil
-}
-

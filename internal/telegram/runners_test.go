@@ -13,7 +13,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/agent"
-	"github.com/kaiizer777/onyx-scrapper/internal/news"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
@@ -359,116 +358,5 @@ func TestFullFlow_AgentRun_ThenStatus(t *testing.T) {
 	}
 }
 
-// ---------- /news handler tests ----------
 
-func TestNewsHandler_EmptyPayloadIsValid(t *testing.T) {
-	// Empty payload must NOT send a usage error — it's valid for /news (uses default window).
-	sm, _, _ := newRunnerTestSessionManager(t)
-	api := sm.api
-
-	var called bool
-	newsRun := func(ctx context.Context, window string) (*store.NewsRun, *news.NewsDigest, error) {
-		called = true
-		return &store.NewsRun{ID: 1, Status: "completed"}, &news.NewsDigest{RunID: 1, Window: "24h"}, nil
-	}
-
-	router := NewRouter(&Bot{API: api}, nil, WithBackends(&EngineBackends{
-		News:     newsRun,
-		Sessions: sm,
-	}))
-
-	err := router.commandHandlers["news"](context.Background(), api, chatMsg(1001), "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Session should have been started (chat is now busy).
-	if !sm.IsBusy(1001) {
-		t.Error("expected session to be started for empty-payload /news")
-	}
-	// Worker runs asynchronously; poll briefly.
-	deadline := time.Now().Add(2 * time.Second)
-	for sm.IsBusy(1001) && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !called {
-		t.Error("expected newsRun to be called")
-	}
-}
-
-func TestNewsHandler_BusyChatRejects(t *testing.T) {
-	sm, _, _ := newRunnerTestSessionManager(t)
-	api := sm.api
-
-	newsRun := func(ctx context.Context, window string) (*store.NewsRun, *news.NewsDigest, error) {
-		time.Sleep(200 * time.Millisecond) // hold slot
-		return &store.NewsRun{ID: 2, Status: "completed"}, &news.NewsDigest{RunID: 2}, nil
-	}
-
-	router := NewRouter(&Bot{API: api}, nil, WithBackends(&EngineBackends{
-		News:     newsRun,
-		Sessions: sm,
-	}))
-
-	// First call — occupies the slot.
-	_ = router.commandHandlers["news"](context.Background(), api, chatMsg(1002), "past week")
-
-	// Second call — should be rejected while worker is in flight.
-	err := router.commandHandlers["news"](context.Background(), api, chatMsg(1002), "past week")
-	if err != nil {
-		// reply() returns an error only if the Telegram send fails — the mock always succeeds.
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Session count must stay at 1.
-	if sm.ActiveCount() > 1 {
-		t.Error("expected at most 1 active session when second /news was rejected")
-	}
-}
-
-func TestNewsHandler_NilRunnerRepliesNotWired(t *testing.T) {
-	sm, _, _ := newRunnerTestSessionManager(t)
-	api := sm.api
-
-	// Register news handler with nil runner (as the stub would behave).
-	router := NewRouter(&Bot{API: api}, nil, WithBackends(&EngineBackends{
-		News:     nil,
-		Sessions: sm,
-	}))
-
-	// The handler should be the default stub, not makeNewsHandler — nil News is not wired.
-	// Calling it should reply "not implemented" without panicking.
-	err := router.commandHandlers["news"](context.Background(), api, chatMsg(1003), "")
-	if err != nil {
-		t.Fatalf("unexpected error from stub: %v", err)
-	}
-	if sm.IsBusy(1003) {
-		t.Error("expected no session to be started for nil news runner")
-	}
-}
-
-func TestDeliverNewsDigest_NilDigest(t *testing.T) {
-	// Nil digest must not panic and must send a polite message.
-	mock := newRunnerTestMock(t)
-	api, _ := tgbotapi.NewBotAPIWithClient(
-		"test-token",
-		mock.server.URL+"/bot%s/%s",
-		&http.Client{Timeout: 5 * time.Second},
-	)
-	// Should not panic:
-	deliverNewsDigest(context.Background(), api, 1000, nil)
-}
-
-func TestDeliverNewsDigest_EmptyFields(t *testing.T) {
-	mock := newRunnerTestMock(t)
-	api, _ := tgbotapi.NewBotAPIWithClient(
-		"test-token",
-		mock.server.URL+"/bot%s/%s",
-		&http.Client{Timeout: 5 * time.Second},
-	)
-	digest := &news.NewsDigest{
-		RunID:  3,
-		Window: "past 24h",
-	}
-	// Empty Fields slice: should send header + "no fields" message, no panic.
-	deliverNewsDigest(context.Background(), api, 1000, digest)
-}
 

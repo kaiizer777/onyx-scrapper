@@ -116,7 +116,7 @@ var ErrCapReached = errors.New("telegram: max_concurrent_sessions cap reached")
 // id (agent_runs.id or research_runs.id) the worker will create or
 // resume.
 func (m *SessionManager) Start(ctx context.Context, chatID int64, runType, goal string, runID int64) (*Session, error) {
-	if runType != "agent" && runType != "research" && runType != "news" {
+	if runType != "agent" && runType != "research" {
 		return nil, fmt.Errorf("telegram: invalid run type %q", runType)
 	}
 	m.mu.Lock()

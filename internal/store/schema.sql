@@ -150,31 +150,3 @@ CREATE TABLE IF NOT EXISTS profile_fields (
 
 CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);
 
-CREATE TABLE IF NOT EXISTS news_runs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    profile_id INTEGER NOT NULL,
-    window TEXT NOT NULL,
-    started_at DATETIME NOT NULL,
-    completed_at DATETIME,
-    status TEXT NOT NULL,
-    FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_news_runs_profile ON news_runs(profile_id, id DESC);
-
-CREATE TABLE IF NOT EXISTS news_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id INTEGER NOT NULL,
-    field_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    url TEXT NOT NULL,
-    source TEXT,
-    published_at DATETIME,
-    summary TEXT,
-    fetch_integrity TEXT NOT NULL DEFAULT 'ok',
-    FOREIGN KEY(run_id) REFERENCES news_runs(id) ON DELETE CASCADE,
-    FOREIGN KEY(field_id) REFERENCES profile_fields(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_news_items_run ON news_items(run_id, field_id);
-

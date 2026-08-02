@@ -23,13 +23,12 @@ const defaultHelpText = `Onyx Scrapper — Telegram gateway
 
 /agent <goal>        run the ReAct agent loop
 /research <goal>     run the deep-research orchestrator
-/news [duration]     fetch a profile-driven news digest
-                     e.g. /news past 24h  /news last week  /news
+
 /fetch <url>         fetch a URL and reply with cleaned text
 /extract <url> <schema>   fetch a URL and reply with structured JSON
 /search <query>      run a local FTS5 / SearXNG search
 
-Anything else (no leading slash) is sent to the default mode: agent, deep-research, or news.`
+Anything else (no leading slash) is sent to the default mode: agent or deep-research.`
 
 // defaultNotImplementedText is the response engine-backed commands
 // produce when they have not yet been wired by main.go. It is short
@@ -92,7 +91,7 @@ func (r *Router) handleStatus(ctx context.Context, bot *tgbotapi.BotAPI, msg *tg
 	}
 
 	// 3. Fallback — no live, no persisted.
-	return reply(bot, msg.Chat.ID, "no runs yet on this chat. try /agent <goal>, /research <goal>, or /news [duration].")
+	return reply(bot, msg.Chat.ID, "no runs yet on this chat. try /agent <goal> or /research <goal>.")
 }
 
 // formatPersistedSession renders the most recent persisted row. Kept

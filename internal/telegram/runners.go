@@ -10,7 +10,6 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/agent"
-	"github.com/kaiizer777/onyx-scrapper/internal/news"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
 )
 
@@ -31,12 +30,7 @@ type AgentRunner func(ctx context.Context, goal string, runID int64, cb agent.St
 // trade-off; Phase 8 can add a subquestion-level hook if needed).
 type ResearchRunner func(ctx context.Context, goal string, runID int64) (*store.ResearchRun, error)
 
-// NewsRunner is the function signature the gateway expects for the
-// /news command. main.go supplies a closure that builds the news
-// orchestrator from the loaded config and runs a full fetch + summarize
-// cycle. The window string is the raw text extracted from the Telegram
-// message (may be empty — the orchestrator falls back to config default).
-type NewsRunner func(ctx context.Context, window string) (*store.NewsRun, *news.NewsDigest, error)
+
 
 // EngineBackends bundles the runners for /agent, /research, /fetch,
 // and /news plus the SessionManager that owns per-chat slots and
@@ -48,7 +42,6 @@ type EngineBackends struct {
 	Agent    AgentRunner
 	Research ResearchRunner
 	Fetch    FetchRunner
-	News     NewsRunner
 	Sessions *SessionManager
 }
 
@@ -70,9 +63,6 @@ func WithBackends(b *EngineBackends) RouterOption {
 		}
 		if b.Fetch != nil {
 			r.commandHandlers["fetch"] = makeFetchHandler(b.Fetch)
-		}
-		if b.News != nil {
-			r.commandHandlers["news"] = makeNewsHandler(b.News, b.Sessions)
 		}
 		if b.Sessions != nil {
 			// Replace the placeholder help/status/cancel handlers
@@ -374,135 +364,4 @@ func makeFetchHandler(run FetchRunner) commandHandler {
 	}
 }
 
-// ----------------------------------------------------------------------------
-// /news handler
-// ----------------------------------------------------------------------------
 
-// makeNewsHandler builds the /news command handler. Unlike /agent and
-// /research, an empty payload is valid — it means "use the configured
-// default window". The payload, when present, is passed verbatim to the
-// recency parser (Phase 3).
-func makeNewsHandler(run NewsRunner, sm *SessionManager) commandHandler {
-	return func(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message, payload string) error {
-		window := strings.TrimSpace(payload) // may be empty — orchestrator handles default
-
-		if sm == nil {
-			return reply(bot, msg.Chat.ID, "news runner is not wired in this build")
-		}
-		if sm.IsBusy(msg.Chat.ID) {
-			return reply(bot, msg.Chat.ID, "you already have a run in flight on this chat. /cancel it first or wait for it to finish.")
-		}
-
-		// The goal stored in the session is the window phrase (may be empty).
-		// RunType="news" lets /status display the correct label.
-		sess, err := sm.Start(ctx, msg.Chat.ID, "news", window, 0)
-		if err != nil {
-			if errors.Is(err, ErrChatBusy) {
-				return reply(bot, msg.Chat.ID, "you already have a run in flight on this chat. /cancel it first or wait for it to finish.")
-			}
-			if errors.Is(err, ErrCapReached) {
-				return reply(bot, msg.Chat.ID, "the gateway is at its max concurrent sessions cap. Try again in a few minutes.")
-			}
-			return reply(bot, msg.Chat.ID, fmt.Sprintf("could not start session: %s", err.Error()))
-		}
-
-		go runNewsWorker(ctx, bot, msg, sess, sm, run, window)
-		return nil
-	}
-}
-
-// runNewsWorker is the goroutine body for /news. It owns the engine call
-// lifecycle: cancel func wiring, progress updates, final per-field delivery.
-func runNewsWorker(parentCtx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message, sess *Session, sm *SessionManager, run NewsRunner, window string) {
-	workerCtx, cancel := context.WithCancel(context.Background())
-	sess.cancel = cancel
-
-	// Use a display label for the ack — show the window or "default" if empty.
-	windowDisplay := window
-	if windowDisplay == "" {
-		windowDisplay = "default"
-	}
-
-	// Immediately ack so the user sees something before the orchestrator starts.
-	// We do this inside the worker (not the handler) because the ack message
-	// send itself can be slow in flaky network conditions and we do not want
-	// to block the router's goroutine.
-	_ = reply(bot, msg.Chat.ID, fmt.Sprintf("📰 Pulling your news digest — window: %s", windowDisplay))
-
-	var digest *news.NewsDigest
-	status, result, err := sm.RunWithProgress(workerCtx, sess, 10*time.Second, func(ctx context.Context) (string, string, error) {
-		runRow, d, runErr := run(ctx, window)
-		if runErr != nil {
-			return "failed", "", runErr
-		}
-		if runRow == nil {
-			return "failed", "", errors.New("news runner returned nil run with no error")
-		}
-		// Back-fill run ID into the live session so /status shows it.
-		sess.mu.Lock()
-		sess.RunID = runRow.ID
-		sess.mu.Unlock()
-		if sm.store != nil && sess.SessionID > 0 {
-			_ = sm.store.UpdateTelegramSessionRunID(sess.SessionID, runRow.ID)
-		}
-		digest = d
-		return runRow.Status, fmt.Sprintf("news run #%d completed", runRow.ID), nil
-	})
-
-	errStr := ""
-	if err != nil {
-		errStr = err.Error()
-	}
-	sm.Finish(sess, status, result, errStr)
-
-	if err != nil {
-		_ = reply(bot, msg.Chat.ID, fmt.Sprintf("❌ news run failed: %s", shortUserError(err)))
-		return
-	}
-
-	// Deliver one message per field. The header shows run ID + window.
-	deliverNewsDigest(parentCtx, bot, msg.Chat.ID, digest)
-}
-
-// deliverNewsDigest sends the news digest to the chat as one message per
-// field, each preceded by a brief header. Long field bodies are split by
-// chunkMessage (existing 4000-char chunker). An HTML parse-mode message
-// is used so bold/italic tags render correctly.
-func deliverNewsDigest(ctx context.Context, bot *tgbotapi.BotAPI, chatID int64, digest *news.NewsDigest) {
-	if digest == nil {
-		_ = reply(bot, chatID, "📰 News run completed but no digest was produced.")
-		return
-	}
-
-	// Overall header: run ID + window.
-	header := news.FormatTelegramDigestHeader(digest)
-	sendHTML(bot, chatID, header)
-
-	if len(digest.Fields) == 0 {
-		_ = reply(bot, chatID, "No profile fields were processed. Check your profile configuration at /ui/profile.")
-		return
-	}
-
-	// One message sequence per field — bounded by max_fields (default 10).
-	for _, fd := range digest.Fields {
-		body := news.FormatTelegramField(fd, digest.Window)
-		for _, chunk := range chunkMessage(body) {
-			sendHTML(bot, chatID, chunk)
-		}
-	}
-}
-
-// sendHTML sends a single Telegram message in HTML parse mode. Errors are
-// logged but not returned — delivery is best-effort for digest sections
-// (a send failure for one field should not abort the others).
-func sendHTML(bot *tgbotapi.BotAPI, chatID int64, text string) {
-	if text == "" {
-		return
-	}
-	msg := tgbotapi.NewMessage(chatID, text)
-	msg.ParseMode = tgbotapi.ModeHTML
-	if _, err := bot.Send(msg); err != nil {
-		// Non-fatal: log only. The remaining field messages will still be sent.
-		_ = err // errors are surfaced by the Telegram API client's own logging
-	}
-}
