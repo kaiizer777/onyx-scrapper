@@ -177,16 +177,9 @@ func (d *deliverer) DeliverReport(ctx context.Context, bot *tgbotapi.BotAPI, cha
 		html = header + "\n\n" + html
 	}
 	if useFile {
-		// File fallback. The body is the HTML-rendered report —
-		// it renders fine in a browser; for a plain-text editor
-		// it still shows the formatting tags. We pass it as
-		// `.md` (Telegram's content detection will offer a
-		// preview) and use the original markdown for the on-
-		// disk artifact. For simplicity, we send the HTML body
-		// the user would have seen; the original markdown is
-		// still available via the agent_runs/research_runs
-		// table.
-		body := d.f.MarkdownToHTML(reportMD)
+		// File fallback: send the original markdown so the user
+		// gets clean readable text, not raw HTML source tags.
+		body := []byte(reportMD)
 		caption := header
 		if caption == "" {
 			caption = "report"
@@ -195,7 +188,7 @@ func (d *deliverer) DeliverReport(ctx context.Context, bot *tgbotapi.BotAPI, cha
 			slog.Int64("chat_id", chatID),
 			slog.Int("body_chars", len(body)),
 		)
-		return d.sendFile(ctx, bot, chatID, "onyx_report.html", []byte(body), caption)
+		return d.sendFile(ctx, bot, chatID, "onyx_report.md", body, caption)
 	}
 	chunks := chunkMessageHTML(html)
 	slog.DebugContext(ctx, "telegram.delivery.chunked",

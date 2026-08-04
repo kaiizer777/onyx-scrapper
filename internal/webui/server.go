@@ -68,6 +68,7 @@ func (h *UIHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/profile", h.handleProfilePage)
 	mux.HandleFunc("GET /ui/telegram", h.handleGetTelegramSettings)
 	mux.HandleFunc("POST /ui/telegram", h.handlePostTelegramSettings)
+	mux.HandleFunc("POST /ui/enhance-prompt", h.handleEnhancePrompt)
 }
 
 func (h *UIHandler) handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -437,3 +438,61 @@ func (h *UIHandler) handlePostTelegramSettings(w http.ResponseWriter, r *http.Re
 	// Return updated state
 	h.handleGetTelegramSettings(w, r)
 }
+
+type enhancePromptRequest struct {
+	Prompt string `json:"prompt"`
+}
+
+type enhancePromptResponse struct {
+	OriginalPrompt string `json:"original_prompt"`
+	EnhancedPrompt string `json:"enhanced_prompt"`
+	Enhanced       bool   `json:"enhanced"`
+	Error          string `json:"error,omitempty"`
+}
+
+func (h *UIHandler) handleEnhancePrompt(w http.ResponseWriter, r *http.Request) {
+	var req enhancePromptRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	rawPrompt := strings.TrimSpace(req.Prompt)
+	if rawPrompt == "" {
+		http.Error(w, "prompt is empty", http.StatusBadRequest)
+		return
+	}
+
+	cfg, _ := config.LoadConfig(ConfigPath)
+	groqKey := cfg.GetGroqAPIKey()
+	if groqKey == "" {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(enhancePromptResponse{
+			OriginalPrompt: rawPrompt,
+			EnhancedPrompt: rawPrompt,
+			Enhanced:       false,
+			Error:          "groq API key not set in config.yaml",
+		})
+		return
+	}
+
+	enhanced, err := llm.EnhancePromptWithGroq(r.Context(), groqKey, rawPrompt)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(enhancePromptResponse{
+			OriginalPrompt: rawPrompt,
+			EnhancedPrompt: rawPrompt,
+			Enhanced:       false,
+			Error:          err.Error(),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(enhancePromptResponse{
+		OriginalPrompt: rawPrompt,
+		EnhancedPrompt: enhanced,
+		Enhanced:       true,
+	})
+}
+

@@ -114,6 +114,7 @@ type Config struct {
 	SavedModels []SavedModel `yaml:"saved_models,omitempty"`
 
 	ScraperAPIKey string          `yaml:"scraperapi_key"`
+	Groq          string          `yaml:"groq,omitempty"`
 	TinyFish      *TinyFishConfig `yaml:"tinyfish,omitempty"`
 	Jina          *JinaConfig     `yaml:"jina,omitempty"`
 	Discovery     *DiscoveryConfig `yaml:"discovery,omitempty"`
@@ -128,6 +129,23 @@ func (c *Config) ActiveProviderConfig() ProviderConfig {
 		return ProviderConfig{}
 	}
 	return c.Providers[c.ActiveProvider]
+}
+
+// GetGroqAPIKey returns the Groq API key from GROQ_API_KEY env var,
+// top-level groq field in config.yaml, or providers["groq"].api_key.
+func (c *Config) GetGroqAPIKey() string {
+	if envKey := os.Getenv("GROQ_API_KEY"); envKey != "" {
+		return envKey
+	}
+	if c != nil {
+		if c.Groq != "" {
+			return c.Groq
+		}
+		if p, ok := c.Providers["groq"]; ok && p.APIKey != "" {
+			return p.APIKey
+		}
+	}
+	return ""
 }
 
 // GetScraperAPIKey returns the ScraperAPI key from env var SCRAPERAPI_KEY or config file.
@@ -299,6 +317,7 @@ func LoadConfig(path string) (*Config, error) {
 			return nil, fmt.Errorf("parse config yaml: %w", err)
 		}
 		migrated.ScraperAPIKey = full.ScraperAPIKey
+		migrated.Groq = full.Groq
 		migrated.TinyFish = full.TinyFish
 		migrated.Jina = full.Jina
 		migrated.Discovery = full.Discovery
@@ -386,6 +405,9 @@ func mergeConfig(existing, incoming *Config) *Config {
 
 	if incoming.ScraperAPIKey != "" {
 		merged.ScraperAPIKey = incoming.ScraperAPIKey
+	}
+	if incoming.Groq != "" {
+		merged.Groq = incoming.Groq
 	}
 	if incoming.TinyFish != nil {
 		merged.TinyFish = incoming.TinyFish

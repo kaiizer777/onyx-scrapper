@@ -99,6 +99,58 @@ func TestDeliverer_HugeBodyFallsBackToFile(t *testing.T) {
 	}
 }
 
+// TestDeliverer_FileFallback_SendsMarkdownNotHTML is a regression test for the
+// bug where DeliverReport sent HTML-rendered content (with <b>, <i>, <a href>
+// tags) as the file attachment, causing users to see raw HTML source instead of
+// readable text. The file body must contain the original markdown, not HTML.
+func TestDeliverer_FileFallback_SendsMarkdownNotHTML(t *testing.T) {
+	var capturedBody []byte
+	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "sendDocument") {
+			if err := r.ParseMultipartForm(10 << 20); err == nil {
+				f, _, err := r.FormFile("document")
+				if err == nil {
+					defer f.Close()
+					buf := make([]byte, 10<<20)
+					n, _ := f.Read(buf)
+					capturedBody = buf[:n]
+				}
+			}
+		}
+		_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1,"date":1,"chat":{"id":1,"type":"private"},"text":"ok"}}`))
+	}))
+	defer mock.Close()
+	api := newMockedBotAPI(t, mock)
+
+	d := newDeliverer()
+	// Construct a markdown report big enough to trigger the file fallback.
+	// It contains bold markers (**) that the formatter would convert to <b> tags.
+	mdLine := "**bold heading** and some text. "
+	huge := strings.Repeat(mdLine, FileFallbackThreshold/len(mdLine)+10)
+	if err := d.DeliverReport(context.Background(), api, 42, "", huge, nil); err != nil {
+		t.Fatalf("DeliverReport: %v", err)
+	}
+	if len(capturedBody) == 0 {
+		t.Fatal("expected sendDocument to be called with a file body")
+	}
+	body := string(capturedBody)
+	// The body must be raw markdown — it must contain the original ** markers,
+	// not the HTML <b> tags the formatter would produce.
+	if strings.Contains(body, "<b>") || strings.Contains(body, "</b>") {
+		t.Errorf("file body contains HTML tags — expected raw markdown; got prefix: %q", body[:min(200, len(body))])
+	}
+	if !strings.Contains(body, "**bold heading**") {
+		t.Errorf("file body missing original markdown markers; got prefix: %q", body[:min(200, len(body))])
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func TestDeliverer_EmptyBodyIsNoOp(t *testing.T) {
 	var calls int32
 	mock := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

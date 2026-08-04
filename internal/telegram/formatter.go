@@ -18,9 +18,9 @@ const (
 	MaxCaptionChars = 1024
 	// FileFallbackThreshold is the body length above which we switch
 	// from "send as a series of messages" to "send as a single
-	// document". 32 KiB is a comfortable boundary that keeps the
-	// chunker from emitting >8 messages on a single report.
-	FileFallbackThreshold = 32 * 1024
+	// document". Setting this to MaxMessageChars ensures we never chunk,
+	// and instead immediately fall back to a file attachment for large reports.
+	FileFallbackThreshold = MaxMessageChars
 	// CodeBlockInlineCap is the threshold above which fenced code
 	// blocks (e.g. JSON extraction results) are attached as files
 	// instead of inlined. Telegram renders >1000 char code blocks

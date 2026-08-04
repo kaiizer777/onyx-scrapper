@@ -46,34 +46,5 @@ func RenderReport(llmReport string, dbSqs []store.ResearchSubQuestion, pages []s
 	sb.WriteString(fmt.Sprintf("- **Blocked**: %d\n", counts[string(quality.FetchBlocked)]))
 	sb.WriteString(fmt.Sprintf("- **Timeout**: %d\n", counts[string(quality.FetchTimeout)]))
 	sb.WriteString(fmt.Sprintf("- **FallbackRecovered**: %d\n", counts[string(quality.FetchFallbackRecovered)]))
-	sb.WriteString("\n")
-
-	// Sources Consulted & Authority Breakdown
-	tierCounts := make(map[quality.AuthorityTier]int)
-
-	sb.WriteString("### Sources Consulted\n")
-	if len(pages) == 0 {
-		sb.WriteString("No sources were consulted.\n")
-	} else {
-		for _, p := range pages {
-			tierStr := "unrated"
-			if authManager != nil {
-				tier := authManager.GetAuthorityTier(p.URL)
-				tierCounts[tier]++
-				tierStr = tier.String()
-			}
-			sb.WriteString(fmt.Sprintf("- [%s](%s) (Integrity: `%s`, Tier: `%s`)\n", p.URL, p.URL, p.FetchIntegrity, tierStr))
-		}
-	}
-	
-	if authManager != nil {
-		sb.WriteString("\n")
-		sb.WriteString(fmt.Sprintf("- Source authority: %d primary, %d established, %d general, %d unrated domains cited\n", 
-			tierCounts[quality.TierPrimary], 
-			tierCounts[quality.TierEstablished], 
-			tierCounts[quality.TierGeneral], 
-			tierCounts[quality.TierUnknown]))
-	}
-
 	return sb.String()
 }

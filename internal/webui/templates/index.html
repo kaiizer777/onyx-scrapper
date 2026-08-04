@@ -323,6 +323,38 @@
     animation: slideUp 0.3s ease-out;
   }
 
+  .enhanced-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(165, 180, 252, 0.3);
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+
+  .original-prompt-collapsible {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+    color: #94a3b8;
+  }
+  .original-prompt-collapsible summary {
+    cursor: pointer;
+    font-weight: 500;
+    user-select: none;
+    outline: none;
+  }
+  .original-prompt-collapsible summary:hover {
+    color: #cbd5e1;
+  }
+
   /* Agent Container */
   .agent-container {
     display: flex;
@@ -457,6 +489,27 @@
     gap: 10px;
     text-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
   }
+  .report-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    padding: 0;
+    outline: none;
+  }
+  .report-action-btn:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+  }
   
   .report-content {
     background: linear-gradient(160deg, rgba(20, 26, 40, 0.9) 0%, rgba(10, 14, 23, 0.95) 100%);
@@ -487,8 +540,8 @@
   .report-content ul, .report-content ol { padding-left: 24px; margin-bottom: 18px; }
   .report-content li { margin-bottom: 8px; }
   .report-content strong { color: #ffffff; font-weight: 600; }
-  .report-content a { color: #818cf8; text-decoration: none; font-weight: 500; }
-  .report-content a:hover { text-decoration: underline; text-shadow: 0 0 8px rgba(129, 140, 248, 0.5); }
+  .report-content a { color: inherit !important; text-decoration: none !important; pointer-events: none !important; cursor: text !important; }
+  .report-content a:hover { text-decoration: none !important; text-shadow: none !important; }
   .report-content pre {
     background: #070a10; 
     padding: 16px; 
@@ -526,49 +579,141 @@
 
   .loading-indicator {
     font-size: 13px; 
-    color: #f1f5f9;
+    font-weight: 500;
+    color: #f8fafc;
     display: inline-flex; 
     align-items: center; 
     gap: 12px;
-    padding: 12px 20px;
-    background: linear-gradient(145deg, rgba(22, 29, 45, 0.8), rgba(13, 17, 28, 0.9));
-    border: 1px solid rgba(99, 102, 241, 0.3);
-    border-radius: 24px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 10px 22px;
+    background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-top: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 30px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 4px rgba(56, 189, 248, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25);
     margin-left: 20px;
     position: relative;
     align-self: flex-start;
+    backdrop-filter: blur(12px);
+    letter-spacing: -0.01em;
   }
   .loading-indicator::before {
     content: '';
     position: absolute;
-    left: -17px;
+    left: -18px;
     top: 50%;
     transform: translateY(-50%);
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
-    background: #0ea5e9;
-    box-shadow: 0 0 14px #0ea5e9;
-    animation: pulse 1.5s infinite;
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+    box-shadow: 0 0 12px #38bdf8, 0 0 24px rgba(56, 189, 248, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    animation: pulse 1.5s infinite ease-in-out;
   }
   @keyframes pulse {
-    0% { opacity: 0.5; transform: translateY(-50%) scale(0.8); }
-    50% { opacity: 1; transform: translateY(-50%) scale(1.2); box-shadow: 0 0 20px #0ea5e9; }
-    100% { opacity: 0.5; transform: translateY(-50%) scale(0.8); }
+    0% { opacity: 0.6; transform: translateY(-50%) scale(0.85); box-shadow: 0 0 8px #38bdf8; }
+    50% { opacity: 1; transform: translateY(-50%) scale(1.25); box-shadow: 0 0 18px #38bdf8, 0 0 30px rgba(56, 189, 248, 0.8); }
+    100% { opacity: 0.6; transform: translateY(-50%) scale(0.85); box-shadow: 0 0 8px #38bdf8; }
   }
-  .loading-dots { display: flex; gap: 4px; align-items: center; }
+  .loading-dots { display: flex; gap: 5px; align-items: center; }
   .loading-dots span {
-    width: 5px; height: 5px;
-    background: #38bdf8;
+    width: 6px; height: 6px;
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
     border-radius: 50%;
     animation: bounce 1.4s infinite ease-in-out both;
-    box-shadow: 0 0 5px #38bdf8;
+    box-shadow: 0 0 8px #38bdf8, inset 0 1px 0 rgba(255, 255, 255, 0.8);
   }
   .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
   .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
-  @keyframes bounce { 0%, 80%, 100% { transform: scale(0); opacity: 0.3; } 40% { transform: scale(1); opacity: 1; } }
+  @keyframes bounce { 0%, 80%, 100% { transform: scale(0.3); opacity: 0.3; } 40% { transform: scale(1.2); opacity: 1; } }
   
+  /* 3D Glassmorphic Audio Controls Capsule */
+  .audio-control-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-left: auto;
+    padding: 3px 6px;
+    background: linear-gradient(145deg, rgba(20, 27, 44, 0.85) 0%, rgba(11, 15, 25, 0.9) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 14px rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(10px);
+  }
+  .audio-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .audio-btn:hover {
+    color: #f8fafc;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-0.5px);
+  }
+  .audio-btn:active {
+    transform: translateY(0);
+  }
+  .audio-speaker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    padding: 0;
+    outline: none;
+  }
+  .audio-speaker-btn:hover {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+  }
+  .audio-speaker-btn.speaking {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.25);
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.5);
+    animation: audio-speaker-pulse 1.4s infinite ease-in-out alternate;
+  }
+  @keyframes audio-speaker-pulse {
+    0% { transform: scale(1); box-shadow: 0 0 8px rgba(56, 189, 248, 0.3); }
+    100% { transform: scale(1.1); box-shadow: 0 0 18px rgba(56, 189, 248, 0.7); }
+  }
+
+  .audio-speed-btn {
+    font-size: 10px;
+    padding: 2px 6px;
+    opacity: 0.75;
+    border: 1px solid transparent;
+    font-weight: 600;
+  }
+  .audio-speed-btn:hover {
+    opacity: 1;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+  .audio-speed-btn.active {
+    opacity: 1;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
+  }
+
   /* 3D Empty State & Prompt Suggestions */
   .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1197,6 +1342,55 @@
   .input-group { display: flex; flex-direction: column; gap: 4px; }
   .input-group.name-group { flex: 1; max-width: 180px; }
   .input-group.kw-group { flex: 2; }
+  .form-group { display: flex; flex-direction: column; gap: 6px; }
+  .form-group label, .field-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .form-input,
+  .field input[type="text"],
+  .field input[type="password"],
+  .field input[type="number"],
+  .field select,
+  .field textarea {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13.5px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+  .form-input:focus,
+  .field input:focus,
+  .field select:focus,
+  .field textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(59, 130, 246, 0.25);
+    background: #0c111d;
+  }
+  .setting-desc, .field-hint {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+    margin-top: 2px;
+  }
+  .setting-desc code {
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: #e2e8f0;
+  }
+
   .input-group label {
     font-size: 10px;
     font-weight: 600;
@@ -1222,18 +1416,20 @@
   .toggle-group { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 0 4px; }
   .toggle-group label { font-size: 10px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
 
-  .switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+  .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
   .switch input { opacity: 0; width: 0; height: 0; }
   .slider {
     position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-    background-color: #1e2638; transition: .2s; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: #1e2638; transition: .25s ease; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
   }
   .slider:before {
-    position: absolute; content: ""; height: 12px; width: 12px; left: 3px; bottom: 3px;
-    background-color: #94a3b8; transition: .2s; border-radius: 50%;
+    position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+    background-color: #94a3b8; transition: .25s ease; border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   }
-  input:checked + .slider { background-color: var(--brand-primary); }
-  input:checked + .slider:before { transform: translateX(16px); background-color: #ffffff; }
+  input:checked + .slider { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-color: rgba(255, 255, 255, 0.3); }
+  input:checked + .slider:before { transform: translateX(20px); background-color: #ffffff; }
 
   .btn-remove {
     background: transparent; border: 1px solid transparent; color: var(--text-muted);
@@ -1372,24 +1568,24 @@
     </div>
     <div class="modal-body">
       
-      <div class="setting-group" style="margin-bottom: 15px;">
-        <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-          <span style="font-size: 13px; font-weight: 600; color: var(--text-primary);">Enable Telegram Gateway</span>
+      <div class="form-group" style="padding-bottom: 6px; border-bottom: 1px solid rgba(255, 255, 255, 0.06);">
+        <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; text-transform: none;">
+          <span style="font-size: 13.5px; font-weight: 600; color: var(--text-primary);">Enable Telegram Gateway</span>
           <div class="switch">
             <input type="checkbox" id="telegram-enabled-toggle">
             <span class="slider"></span>
           </div>
         </label>
-        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Enables the bot on backend startup.</div>
+        <div class="setting-desc">Enables the bot on backend startup.</div>
       </div>
 
       <div class="form-group">
         <label for="telegram-bot-token">Bot Token</label>
         <input type="password" id="telegram-bot-token" class="form-input" placeholder="Enter Bot Token (leave blank to keep current)">
-        <div class="setting-desc">Provided by @BotFather. Changing this requires restarting `onyx serve`.</div>
+        <div class="setting-desc">Provided by @BotFather. Changing this requires restarting <code>onyx serve</code>.</div>
       </div>
 
-      <div class="form-group" style="margin-top: 15px;">
+      <div class="form-group">
         <label for="telegram-chat-ids">Allowed Chat IDs</label>
         <input type="text" id="telegram-chat-ids" class="form-input" placeholder="e.g. 123456789, 987654321">
         <div class="setting-desc">Comma-separated list of Chat IDs authorized to use the bot. Leave blank for no access.</div>
@@ -1508,7 +1704,30 @@
             <div id="model-dropdown-options"></div>
           </div>
         </div>
-        <svg id="global-speaker-icon" onclick="toggleSpeechGlobal()" title="Listen to Active Report" style="cursor: pointer; margin-left: auto; margin-right: 4px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        <div class="audio-control-pill">
+          <button class="audio-btn audio-speed-btn" id="speed-btn-08" onclick="setSpeechSpeed(0.8)" title="0.8x Speed">0.8x</button>
+          <button class="audio-btn" onclick="skipSpeech(-20)" title="Rewind 20 seconds">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 19 2 12 11 5 11 19"></polygon>
+              <polygon points="22 19 13 12 22 5 22 19"></polygon>
+            </svg>
+            <span>20s</span>
+          </button>
+          <button class="audio-speaker-btn" id="global-speaker-icon" onclick="toggleSpeechGlobal()" title="Listen to Active Report">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+          </button>
+          <button class="audio-btn" onclick="skipSpeech(20)" title="Skip 20 seconds">
+            <span>20s</span>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="13 19 22 12 13 5 13 19"></polygon>
+              <polygon points="2 19 11 12 2 5 2 19"></polygon>
+            </svg>
+          </button>
+          <button class="audio-btn audio-speed-btn" id="speed-btn-12" onclick="setSpeechSpeed(1.2)" title="1.2x Speed">1.2x</button>
+        </div>
       </div>
       <div class="input-row">
         <textarea id="query-input" class="query-input" placeholder="Message Onyx..." rows="1" oninput="autoResize(this)"></textarea>
@@ -1810,8 +2029,8 @@ async function stopRun() {
 
 async function submitQuery() {
   const input = document.getElementById('query-input');
-  const query = input.value.trim();
-  if (!query) return;
+  const rawQuery = input.value.trim();
+  if (!rawQuery) return;
   
   const btn = document.getElementById('btn-send');
   setStreamingState(true);
@@ -1819,19 +2038,40 @@ async function submitQuery() {
   // Clear screen and show bubble immediately
   startNew(); 
   document.getElementById('empty-state').style.display = 'none';
-  const userBubbleDiv = appendUserBubble(query);
+  
+  const userBubbleDiv = appendUserBubble(rawQuery);
   
   const type = selectedMode;
   currentRunType = type;
+  
+  let finalQuery = rawQuery;
+  
+  try {
+    const enhanceRes = await fetch('/ui/enhance-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: rawQuery })
+    });
+    
+    if (enhanceRes.ok) {
+      const enhanceData = await enhanceRes.json();
+      if (enhanceData.enhanced && enhanceData.enhanced_prompt) {
+        finalQuery = enhanceData.enhanced_prompt;
+        userBubbleDiv.textContent = finalQuery;
+      }
+    }
+  } catch (e) {
+    console.warn("Prompt enhancement notice:", e);
+  }
   
   try {
     let endpoint, bodyPayload;
     if (type === 'agent') {
       endpoint = '/agent/async';
-      bodyPayload = { goal: query };
+      bodyPayload = { goal: finalQuery };
     } else {
       endpoint = '/deep-research';
-      bodyPayload = { query: query };
+      bodyPayload = { query: finalQuery };
     }
     
     const res = await fetch(endpoint, {
@@ -1858,8 +2098,6 @@ async function submitQuery() {
     thread.appendChild(errBlock);
     scrollToBottom();
   } finally {
-    // If it was just started successfully, pollStatus will handle enabling the input when it finishes.
-    // If there was an error in fetch, we need to re-enable here:
     if (!currentRunId) {
       setStreamingState(false);
     }
@@ -1949,6 +2187,22 @@ async function pollStatus() {
   }
 }
 
+function parseReportMarkdown(mdText) {
+  if (!mdText) return '';
+  try {
+    const renderer = new marked.Renderer();
+    renderer.link = function(href, title, text) {
+      return ''; // Completely remove links and their text
+    };
+    let html = marked.parse(mdText, { renderer: renderer });
+    html = html.replace(/<a\b[^>]*>.*?<\/a>/gi, ''); // Remove raw a-tags completely
+    html = html.replace(/\[\d+\]/g, ''); // Also strip raw [1], [2] citations if any
+    return html;
+  } catch (e) {
+    return mdText.replace(/<a\b[^>]*>.*?<\/a>/gi, '').replace(/\[\d+\]/g, '');
+  }
+}
+
 function renderThread(data) {
   const thread = document.getElementById('thread');
   const run = data.run;
@@ -2007,7 +2261,6 @@ function renderThread(data) {
         detailsHTML += `<ul>` + fds.map(f => `
           <li>
             ${escapeHtml(f.claim)}
-            <br><a href="${escapeHtml(f.source_url)}" target="_blank" style="font-size:11px;color:var(--brand-primary)">${escapeHtml(f.source_url)}</a>
           </li>`).join('') + `</ul>`;
       }
       
@@ -2050,10 +2303,23 @@ function renderThread(data) {
         <div class="report-header" style="display: flex; align-items: center;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span style="flex: 1; margin-left: 8px;">Final Report</span>
-          <svg id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report" style="cursor: pointer; margin-left: auto; margin-right: 12px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-          <svg onclick="downloadPDF('${run.id}')" title="Download PDF" style="cursor: pointer; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="audio-speaker-btn" id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            </button>
+            <button class="report-action-btn" onclick="downloadPDF('${run.id}')" title="Download PDF">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="report-content">${marked.parse(run.report_md)}</div>
+        <div class="report-content">${parseReportMarkdown(run.report_md)}</div>
       `;
       agentContainer.appendChild(reportWrap);
       scrollToBottom();
@@ -2113,10 +2379,23 @@ function renderThread(data) {
         <div class="report-header" style="display: flex; align-items: center;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
           <span style="flex: 1; margin-left: 8px;">Final Report</span>
-          <svg id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report" style="cursor: pointer; margin-left: auto; margin-right: 12px; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="if(!this.classList.contains('speaking')) this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
-          <svg onclick="downloadPDF('${run.id}')" title="Download PDF" style="cursor: pointer; color: var(--text-secondary); transition: color 0.2s;" onmouseover="this.style.color='var(--text-primary)'" onmouseout="this.style.color='var(--text-secondary)'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <button class="audio-speaker-btn" id="speaker-icon-${run.id}" onclick="toggleSpeech('${run.id}')" title="Listen to Report">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+            </button>
+            <button class="report-action-btn" onclick="downloadPDF('${run.id}')" title="Download PDF">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          </div>
         </div>
-        <div class="report-content">${marked.parse(run.result)}</div>
+        <div class="report-content">${parseReportMarkdown(run.result)}</div>
       `;
       agentContainer.appendChild(reportWrap);
       scrollToBottom();
@@ -2534,47 +2813,145 @@ function downloadPDF(runId) {
   html2pdf().set(opt).from(reportContent).save();
 }
 
-function toggleSpeech(runId) {
-  if (!('speechSynthesis' in window)) {
-    alert('Text-to-Speech is not supported in your browser.');
-    return;
+// Robust Speech Synthesis Engine
+let availableVoices = [];
+function updateVoicesList() {
+  if ('speechSynthesis' in window) {
+    availableVoices = window.speechSynthesis.getVoices();
   }
+}
+if ('speechSynthesis' in window) {
+  updateVoicesList();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = updateVoicesList;
+  }
+}
+
+function getPleasingVoice() {
+  if (!availableVoices || availableVoices.length === 0) {
+    if ('speechSynthesis' in window) {
+      availableVoices = window.speechSynthesis.getVoices();
+    }
+  }
+  if (!availableVoices || availableVoices.length === 0) return null;
+
+  const preferredVoiceKeywords = [
+    "Aria Online (Natural)",
+    "Jenny Online (Natural)",
+    "Guy Online (Natural)",
+    "Ana Online (Natural)",
+    "Natural",
+    "Neural",
+    "Google US English",
+    "Google UK English Female",
+    "Google UK English Male",
+    "Google",
+    "Samantha",
+    "Victoria",
+    "Karen",
+    "Serena",
+    "Oliver",
+    "Microsoft Zira Desktop"
+  ];
+
+  for (const keyword of preferredVoiceKeywords) {
+    const match = availableVoices.find(v => v.name.includes(keyword) && v.lang.startsWith('en'));
+    if (match) return match;
+  }
+
+  // Fallback to local English voice for immediate response
+  const localEnglish = availableVoices.find(v => v.localService && v.lang.startsWith('en'));
+  if (localEnglish) return localEnglish;
+
+  const englishVoice = availableVoices.find(v => v.lang.startsWith('en'));
+  if (englishVoice) return englishVoice;
+
+  return availableVoices[0];
+}
+
+function cleanTextForSpeech(rawText) {
+  if (!rawText) return "";
+  let text = rawText;
+
+  // Replace long code blocks with a brief pause indicator
+  text = text.replace(/```[\s\S]*?```/g, ' Code Block. ');
   
-  const icon = document.getElementById('speaker-icon-' + runId);
-  const globalIcon = document.getElementById('global-speaker-icon');
-  
-  if (window.speechSynthesis.speaking) {
+  // Clean URLs
+  text = text.replace(/https?:\/\/(?:www\.)?([^\/\s]+)[^\s]*/gi, '$1');
+
+  // Strip markdown formatting
+  text = text.replace(/^#+\s+/gm, '');
+  text = text.replace(/\*\*(.*?)\*\*/g, '$1');
+  text = text.replace(/\*(.*?)\*/g, '$1');
+  text = text.replace(/__(.*?)__/g, '$1');
+  text = text.replace(/_(.*?)_/g, '$1');
+  text = text.replace(/`([^`]+)`/g, '$1');
+  text = text.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  text = text.replace(/^[\s]*[-*•]\s+/gm, '');
+
+  // Normalize spaces and line breaks
+  text = text.replace(/\n+/g, '. ');
+  text = text.replace(/\s+/g, ' ');
+
+  // Strip any leading non-alphanumeric noise (punctuation/dots) that causes silent delays
+  text = text.replace(/^[^a-zA-Z0-9]+/, '');
+
+  return text.trim();
+}
+
+function splitIntoSentenceChunks(text) {
+  if (!text) return [];
+  const rawSentences = text.split(/(?<=[.!?])\s+/);
+  const chunks = [];
+  let current = "";
+
+  for (const s of rawSentences) {
+    const trimmed = s.trim();
+    if (!trimmed) continue;
+    if ((current + " " + trimmed).length < 200) {
+      current = current ? current + " " + trimmed : trimmed;
+    } else {
+      if (current) chunks.push(current);
+      current = trimmed;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+let speechState = {
+  chunks: [],
+  currentChunkIndex: 0,
+  runId: null,
+  isPlaying: false
+};
+
+function stopSpeech() {
+  speechState.isPlaying = false;
+  speechState.chunks = [];
+  speechState.currentChunkIndex = 0;
+  resetSpeechIcons();
+  if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
-    if (icon) {
-      icon.style.color = 'var(--text-secondary)';
-      icon.classList.remove('speaking');
-    }
-    if (globalIcon) {
-      globalIcon.style.color = 'var(--text-secondary)';
-      globalIcon.classList.remove('speaking');
-    }
-    return;
   }
-  
-  const element = document.getElementById('report-' + runId);
-  if (!element) return;
-  const reportContent = element.querySelector('.report-content');
-  if (!reportContent) return;
-  
-  const text = reportContent.innerText;
-  const utterance = new SpeechSynthesisUtterance(text);
-  
-  utterance.onend = function() {
-    if (icon) {
-      icon.style.color = 'var(--text-secondary)';
-      icon.classList.remove('speaking');
-    }
-    if (globalIcon) {
-      globalIcon.style.color = 'var(--text-secondary)';
-      globalIcon.classList.remove('speaking');
-    }
-  };
-  
+}
+
+function resetSpeechIcons() {
+  const icon = speechState.runId ? document.getElementById('speaker-icon-' + speechState.runId) : null;
+  const globalIcon = document.getElementById('global-speaker-icon');
+  if (icon) {
+    icon.style.color = 'var(--text-secondary)';
+    icon.classList.remove('speaking');
+  }
+  if (globalIcon) {
+    globalIcon.style.color = 'var(--text-secondary)';
+    globalIcon.classList.remove('speaking');
+  }
+}
+
+function updateSpeechIconsSpeaking() {
+  const icon = speechState.runId ? document.getElementById('speaker-icon-' + speechState.runId) : null;
+  const globalIcon = document.getElementById('global-speaker-icon');
   if (icon) {
     icon.style.color = 'var(--brand-primary)';
     icon.classList.add('speaking');
@@ -2583,9 +2960,129 @@ function toggleSpeech(runId) {
     globalIcon.style.color = 'var(--brand-primary)';
     globalIcon.classList.add('speaking');
   }
-  
+}
+
+let currentSpeechSpeed = 1.0;
+
+function setSpeechSpeed(speed) {
+  if (currentSpeechSpeed === speed) {
+    currentSpeechSpeed = 1.0; // Toggle back to 1.0x if clicked again
+  } else {
+    currentSpeechSpeed = speed;
+  }
+
+  // Update UI button highlights
+  const b08 = document.getElementById('speed-btn-08');
+  const b12 = document.getElementById('speed-btn-12');
+  if (b08) b08.classList.toggle('active', currentSpeechSpeed === 0.8);
+  if (b12) b12.classList.toggle('active', currentSpeechSpeed === 1.2);
+
+  // If currently speaking, restart current chunk with the updated speech rate
+  if (speechState.isPlaying && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    setTimeout(() => {
+      playNextChunk();
+    }, 60);
+  }
+}
+
+function playNextChunk() {
+  if (!speechState.isPlaying) return;
+  if (speechState.currentChunkIndex >= speechState.chunks.length) {
+    stopSpeech();
+    return;
+  }
+
+  const chunkText = speechState.chunks[speechState.currentChunkIndex];
+  if (!chunkText || !chunkText.trim()) {
+    speechState.currentChunkIndex++;
+    playNextChunk();
+    return;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(chunkText.trim());
+  const voice = getPleasingVoice();
+  if (voice) utterance.voice = voice;
+
+  utterance.rate = Math.max(0.5, Math.min(2.0, 0.96 * currentSpeechSpeed));
+  utterance.pitch = 1.02;
+  utterance.volume = 1.0;
+
+  utterance.onend = () => {
+    if (!speechState.isPlaying) return;
+    speechState.currentChunkIndex++;
+    playNextChunk();
+  };
+
+  utterance.onerror = (err) => {
+    console.warn('Speech chunk playback notice:', err);
+    if (!speechState.isPlaying) return;
+    speechState.currentChunkIndex++;
+    playNextChunk();
+  };
+
+  updateSpeechIconsSpeaking();
   window.speechSynthesis.speak(utterance);
 }
+
+function toggleSpeech(runId) {
+  if (!('speechSynthesis' in window)) {
+    alert('Text-to-Speech is not supported in your browser.');
+    return;
+  }
+
+  // Toggle off if already playing this report
+  if (speechState.isPlaying && speechState.runId === runId) {
+    stopSpeech();
+    return;
+  }
+
+  // Stop any active speech
+  stopSpeech();
+
+  const element = document.getElementById('report-' + runId);
+  if (!element) return;
+  const reportContent = element.querySelector('.report-content');
+  if (!reportContent) return;
+
+  const cleaned = cleanTextForSpeech(reportContent.innerText);
+  if (!cleaned) return;
+
+  const chunks = splitIntoSentenceChunks(cleaned);
+  if (chunks.length === 0) return;
+
+  speechState.chunks = chunks;
+  speechState.currentChunkIndex = 0;
+  speechState.runId = runId;
+  speechState.isPlaying = true;
+
+  // 60ms async pause after cancel prevents Chromium SpeechSynthesis lockup
+  setTimeout(() => {
+    playNextChunk();
+  }, 60);
+}
+
+window.skipSpeech = function(seconds) {
+  if (!speechState.isPlaying || speechState.chunks.length === 0) return;
+
+  window.speechSynthesis.cancel();
+
+  // Each sentence chunk is roughly ~10-12 seconds of speech
+  const chunkOffset = seconds > 0 ? Math.max(1, Math.round(seconds / 11)) : Math.min(-1, Math.round(seconds / 11));
+  let newIndex = speechState.currentChunkIndex + chunkOffset;
+
+  if (newIndex < 0) newIndex = 0;
+  if (newIndex >= speechState.chunks.length) {
+    stopSpeech();
+    return;
+  }
+
+  speechState.currentChunkIndex = newIndex;
+
+  setTimeout(() => {
+    playNextChunk();
+  }, 60);
+};
 
 
 
