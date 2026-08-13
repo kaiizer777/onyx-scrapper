@@ -1,23 +1,76 @@
-version: '3.7'
-
 services:
   searxng:
-    image: docker.io/searxng/searxng:latest
+    image: searxng/searxng:latest
     container_name: onyx-searxng
-    ports:
-      - "8888:8080"
+    restart: unless-stopped
     volumes:
       - ./searxng:/etc/searxng:rw
+      - searxng-data:/etc/searxng/data
     environment:
-      - SEARXNG_BASE_URL=http://localhost:8888/
+      - SEARXNG_BASE_URL=http://localhost:9090/
     cap_drop:
       - ALL
     cap_add:
       - CHOWN
       - SETGID
       - SETUID
+    ports:
+      - "8081:8080"
+    networks:
+      - onyx-net
     logging:
       driver: "json-file"
       options:
         max-size: "1m"
         max-file: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  onyx:
+    image: ${DOCKER_IMAGE:-kaiizer777/onyx-scrapper:latest}
+    container_name: onyx-scrapper
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${ONYX_PORT:-9090}:9090"
+    volumes:
+      # Named volume: SQLite database survives docker compose down / up.
+      - onyx-data:/app/data
+      # Optional: mount your own config.yaml (uncomment to use).
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      # Point onyx at the searxng container via Docker internal DNS.
+      - SEARXNG_URL=http://searxng:8080
+      # API keys — populated from .env automatically by docker compose.
+      - SCRAPERAPI_KEY=${SCRAPERAPI_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+    depends_on:
+      searxng:
+        condition: service_healthy
+    networks:
+      - onyx-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+networks:
+  onyx-net:
+    driver: bridge
+
+volumes:
+  onyx-data:
+  searxng-data:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
 	"github.com/go-rod/rod"
@@ -35,6 +36,12 @@ func FetchRendered(ctx context.Context, targetURL string, timeout time.Duration)
 	l := launcher.New().
 		Headless(true).
 		Leakless(false)
+
+	// In Docker containers Chromium must run without the kernel sandbox.
+	// Set CHROMIUM_NO_SANDBOX=1 in container environments.
+	if os.Getenv("CHROMIUM_NO_SANDBOX") == "1" {
+		l = l.Set("no-sandbox").Bin("/usr/bin/chromium")
+	}
 
 	url, err := l.Launch()
 	if err != nil {

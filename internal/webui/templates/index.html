@@ -630,26 +630,26 @@
   .audio-control-pill {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 3px;
     margin-left: auto;
-    padding: 3px 6px;
+    padding: 2px 4px;
     background: linear-gradient(145deg, rgba(20, 27, 44, 0.85) 0%, rgba(11, 15, 25, 0.9) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
+    border-radius: 16px;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 14px rgba(0, 0, 0, 0.35);
     backdrop-filter: blur(10px);
   }
   .audio-btn {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 10.5px;
+    font-size: 9.5px;
     font-weight: 600;
-    padding: 3px 7px;
-    border-radius: 12px;
+    padding: 2px 4px;
+    border-radius: 10px;
     cursor: pointer;
     user-select: none;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -666,8 +666,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 26px;
-    height: 26px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -816,23 +816,24 @@
   .mode-selector {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background: linear-gradient(180deg, rgba(14, 165, 233, 0.15) 0%, rgba(2, 132, 199, 0.1) 100%);
     border: 1px solid rgba(14, 165, 233, 0.3);
     border-top: 1px solid rgba(125, 211, 252, 0.35);
     color: #f1f5f9;
-    font-size: 13px;
+    font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
-    padding: 6px 12px;
-    border-radius: 9px;
+    padding: 4px 10px;
+    border-radius: 7px;
     box-shadow: 0 3px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
     font-family: var(--font-sans);
     user-select: none;
+    white-space: nowrap;
   }
   .mode-selector .mode-caret {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     color: #7dd3fc;
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -1439,6 +1440,75 @@
   .btn-remove svg { width: 15px; height: 15px; }
 
   .empty-fields { padding: 30px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  /* Toggle Switch for Enhance Prompt */
+  .enhance-toggle-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+  }
+
+  .enhance-toggle-label {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    user-select: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 26px;
+    height: 16px;
+  }
+
+  .toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-surface-hover);
+    border: 1px solid var(--border-lighter);
+    transition: .3s;
+    border-radius: 20px;
+  }
+
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 10px;
+    width: 10px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--text-secondary);
+    transition: .3s;
+    border-radius: 50%;
+  }
+
+  input:checked + .toggle-slider {
+    background-color: var(--primary);
+    border-color: var(--primary);
+  }
+
+  input:checked + .toggle-slider:before {
+    transform: translateX(10px);
+    background-color: #fff;
+  }
 </style>
 </head>
 <body>
@@ -1703,6 +1773,15 @@
             <div class="mode-dropdown-header">Select Model</div>
             <div id="model-dropdown-options"></div>
           </div>
+        </div>
+        <div class="enhance-toggle-wrapper">
+          <label class="enhance-toggle-label" title="Enable to automatically improve and structure your prompt using LLM before submission">
+            ⚡ Enhance
+            <div class="toggle-switch">
+              <input type="checkbox" id="enhance-prompt-toggle" checked>
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
         </div>
         <div class="audio-control-pill">
           <button class="audio-btn audio-speed-btn" id="speed-btn-08" onclick="setSpeechSpeed(0.8)" title="0.8x Speed">0.8x</button>
@@ -1991,9 +2070,9 @@ function setStreamingState(isStreaming) {
   const input = document.getElementById('query-input');
   
   if (isStreaming) {
-    btnSend.style.display = 'none';
+    btnSend.style.display = 'flex';
     btnStop.style.display = 'flex';
-    input.disabled = true;
+    input.disabled = false;
   } else {
     btnSend.style.display = 'flex';
     btnStop.style.display = 'none';
@@ -2045,23 +2124,27 @@ async function submitQuery() {
   currentRunType = type;
   
   let finalQuery = rawQuery;
+  const enhanceToggle = document.getElementById('enhance-prompt-toggle');
+  const isEnhanceEnabled = enhanceToggle ? enhanceToggle.checked : true;
   
-  try {
-    const enhanceRes = await fetch('/ui/enhance-prompt', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: rawQuery })
-    });
-    
-    if (enhanceRes.ok) {
-      const enhanceData = await enhanceRes.json();
-      if (enhanceData.enhanced && enhanceData.enhanced_prompt) {
-        finalQuery = enhanceData.enhanced_prompt;
-        userBubbleDiv.textContent = finalQuery;
+  if (isEnhanceEnabled) {
+    try {
+      const enhanceRes = await fetch('/ui/enhance-prompt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: rawQuery })
+      });
+      
+      if (enhanceRes.ok) {
+        const enhanceData = await enhanceRes.json();
+        if (enhanceData.enhanced && enhanceData.enhanced_prompt) {
+          finalQuery = enhanceData.enhanced_prompt;
+          userBubbleDiv.textContent = finalQuery;
+        }
       }
+    } catch (e) {
+      console.warn("Prompt enhancement notice:", e);
     }
-  } catch (e) {
-    console.warn("Prompt enhancement notice:", e);
   }
   
   try {

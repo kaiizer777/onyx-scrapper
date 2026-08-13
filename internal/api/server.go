@@ -575,7 +575,11 @@ func (s *Server) handleAgentRunDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearxHealth(w http.ResponseWriter, r *http.Request) {
-	searxURL := "http://localhost:8888/search?q=test&format=json"
+	baseURL := os.Getenv("SEARXNG_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	searxURL := strings.TrimRight(baseURL, "/") + "/search?q=test&format=json"
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Get(searxURL)
 	if err != nil {

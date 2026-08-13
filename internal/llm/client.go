@@ -152,6 +152,11 @@ func (c *Client) Chat(ctx context.Context, messages []Message) (string, error) {
 		var errStr string
 
 		if reqErr != nil {
+			// Context cancellation / deadline is terminal — retrying with a dead
+			// context just burns retry budget and produces log noise.
+			if ctx.Err() != nil {
+				return "", fmt.Errorf("context cancelled during retry backoff: %w", ctx.Err())
+			}
 			retryable = true
 			errStr = reqErr.Error()
 		} else {

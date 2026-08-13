@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -64,6 +65,10 @@ func (p *Pool) getBrowser() (*rod.Browser, error) {
 	l := launcher.New().
 		Headless(true).
 		Leakless(false)
+
+	if os.Getenv("CHROMIUM_NO_SANDBOX") == "1" {
+		l = l.Set("no-sandbox").Bin("/usr/bin/chromium")
+	}
 
 	url, err := l.Launch()
 	if err != nil {
