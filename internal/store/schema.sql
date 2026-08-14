@@ -150,3 +150,66 @@ CREATE TABLE IF NOT EXISTS profile_fields (
 
 CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);
 
+-- Teacher Agent tables (Phase 1)
+CREATE TABLE IF NOT EXISTS teacher_runs (
+    id              TEXT PRIMARY KEY,
+    raw_goal        TEXT NOT NULL,
+    status          TEXT NOT NULL, -- clarifying | brief_ready | researching | writing | critiquing | assembling | done | error
+    learning_brief  TEXT,          -- JSON
+    report_md       TEXT,
+    error_message   TEXT,
+    created_at      DATETIME NOT NULL,
+    updated_at      DATETIME NOT NULL,
+    completed_at    DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS teacher_clarifications (
+    id          TEXT PRIMARY KEY,
+    run_id      TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE,
+    round       INTEGER NOT NULL,
+    question    TEXT NOT NULL,     -- JSON: {text, input_kind, options[]}
+    answer      TEXT,              -- learner's raw answer (text or selected option)
+    created_at  DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS teacher_outline (
+    id                  TEXT PRIMARY KEY,
+    run_id              TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE,
+    section_order       INTEGER NOT NULL,
+    title               TEXT NOT NULL,
+    learning_objective  TEXT NOT NULL,   -- one sentence: what the learner should be able to do/explain after this section
+    depends_on          TEXT,            -- optional CSV of earlier section ids, for ordering/prereqs
+    status              TEXT NOT NULL    -- pending | drafting | critiquing | done
+);
+
+CREATE TABLE IF NOT EXISTS teacher_findings (
+    id               TEXT PRIMARY KEY,
+    run_id           TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE,
+    section_id       TEXT NOT NULL REFERENCES teacher_outline(id) ON DELETE CASCADE,
+    claim            TEXT NOT NULL,
+    source_url       TEXT,
+    source_provider  TEXT,           -- searxng | tinyfish | jina
+    authority_tier   TEXT,           -- Primary | Established | General (reuse existing tiering)
+    confidence       REAL,
+    created_at       DATETIME NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS teacher_sections (
+    id               TEXT PRIMARY KEY,
+    run_id           TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE,
+    outline_id       TEXT NOT NULL REFERENCES teacher_outline(id) ON DELETE CASCADE,
+    draft_md         TEXT,
+    critique_notes   TEXT,           -- JSON array of {issue, severity, suggestion}
+    final_md         TEXT,
+    revision_count   INTEGER NOT NULL DEFAULT 0,
+    created_at       DATETIME NOT NULL,
+    updated_at       DATETIME NOT NULL
+);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS teacher_fts USING fts5(run_id, section_title, content);
+
+CREATE INDEX IF NOT EXISTS idx_teacher_clarifications_run ON teacher_clarifications(run_id, round ASC);
+CREATE INDEX IF NOT EXISTS idx_teacher_outline_run ON teacher_outline(run_id, section_order ASC);
+CREATE INDEX IF NOT EXISTS idx_teacher_findings_run_sec ON teacher_findings(run_id, section_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_sections_run ON teacher_sections(run_id, outline_id);
+

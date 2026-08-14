@@ -65,16 +65,19 @@ func (w *Worker) RunSubResearch(ctx context.Context, runID int64, sqID int64, qu
 		reformulated, reformErr := w.reformulateQuery(ctx, question)
 		if reformErr == nil && reformulated != "" && reformulated != question {
 			slog.Info("Reformulating query due to fetch failures", "original", question, "reformulated", reformulated)
-			success, _ = w.attemptSearchAndExtract(ctx, runID, sqID, reformulated)
+			success, err = w.attemptSearchAndExtract(ctx, runID, sqID, reformulated)
 		}
 		
 		if !success {
 			_ = w.store.UpdateSubQuestionStatus(sqID, "insufficient_data")
+			if err != nil {
+				return err
+			}
 			return fmt.Errorf("insufficient_data for question: %s", question)
 		}
 	}
 	_ = w.store.UpdateSubQuestionStatus(sqID, "done")
-	return err
+	return nil
 }
 
 func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID int64, question string) (bool, error) {
@@ -151,8 +154,14 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 
 	// 3. Rerank
 	ranked, err := w.registry.Rerank(ctx, question, filteredChunks)
-	if err != nil {
-		slog.Warn("Rerank failed or disabled, falling through unranked", "error", err)
+	if err != nil || len(ranked) == 0 {
+		if err != nil {
+			slog.Warn("Rerank failed or disabled, falling through unranked", "error", err)
+		}
+		ranked = make([]discovery.RankedDoc, len(filteredChunks))
+		for i, chunk := range filteredChunks {
+			ranked[i] = discovery.RankedDoc{Index: i, Text: chunk, Score: 1.0}
+		}
 	}
 
 	// 4. Keep top K (default 8)
@@ -163,6 +172,9 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 	for i, r := range ranked {
 		if i >= topK {
 			break
+		}
+		if r.Index < 0 || r.Index >= len(filteredURLs) || r.Index >= len(filteredProviders) {
+			continue
 		}
 		selectedChunks = append(selectedChunks, r.Text)
 		selectedURLs = append(selectedURLs, filteredURLs[r.Index])

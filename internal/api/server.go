@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -21,16 +22,18 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/profile"
 	"github.com/kaiizer777/onyx-scrapper/internal/research"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
+	"github.com/kaiizer777/onyx-scrapper/internal/teacher"
 	"github.com/kaiizer777/onyx-scrapper/internal/webui"
 )
 
 // Server represents the Onyx Scrapper local HTTP API server.
 type Server struct {
-	port      int
-	client    *llm.Client
-	store     *store.Store
-	registry  *discovery.Registry
-	httpSrv   *http.Server
+	port                int
+	client              *llm.Client
+	store               *store.Store
+	registry            *discovery.Registry
+	teacherOrchestrator *teacher.Orchestrator
+	httpSrv             *http.Server
 
 	// telegramWebhook is an optional http.Handler mounted at
 	// /telegram/webhook when the gateway is in webhook mode. It is
@@ -73,6 +76,13 @@ func WithStore(st *store.Store) Option {
 func WithRegistry(registry *discovery.Registry) Option {
 	return func(s *Server) {
 		s.registry = registry
+	}
+}
+
+// WithTeacherOrchestrator sets the Teacher orchestrator instance.
+func WithTeacherOrchestrator(orch *teacher.Orchestrator) Option {
+	return func(s *Server) {
+		s.teacherOrchestrator = orch
 	}
 }
 
@@ -126,6 +136,16 @@ func NewServer(opts ...Option) *Server {
 	mux.HandleFunc("POST /agent/runs/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
 	mux.HandleFunc("POST /deep-research/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
 
+	// Teacher Agent API routes (Phases 9 & 10)
+	mux.HandleFunc("/teacher/start", s.corsMiddleware(s.handleTeacherStart))
+	mux.HandleFunc("/teacher/answer", s.corsMiddleware(s.handleTeacherAnswer))
+	mux.HandleFunc("/teacher/brief/{run_id}", s.corsMiddleware(s.handleTeacherBriefRouter))
+	mux.HandleFunc("/teacher/generate", s.corsMiddleware(s.handleTeacherGenerate))
+	mux.HandleFunc("/teacher/stream/{run_id}", s.corsMiddleware(s.handleTeacherStream))
+	mux.HandleFunc("/teacher/report/{run_id}", s.corsMiddleware(s.handleTeacherReport))
+	mux.HandleFunc("/teacher/section/{id}/regenerate", s.corsMiddleware(s.handleTeacherSectionRegenerate))
+	mux.HandleFunc("POST /teacher/runs/{id}/cancel", s.corsMiddleware(s.handleCancelRun))
+
 	mux.HandleFunc("GET /health/searx", s.corsMiddleware(s.handleSearxHealth))
 	mux.HandleFunc("GET /profile", s.corsMiddleware(s.handleGetProfile))
 	mux.HandleFunc("POST /profile", s.corsMiddleware(s.handlePostProfile))
@@ -145,11 +165,15 @@ func NewServer(opts ...Option) *Server {
 		slog.Info("Telegram webhook mounted on serve mux", "path", telegramWebhookPath)
 	}
 
-	// Wrap mux: serve ui.html at root without registering "GET /" in the mux
+	// Wrap mux: serve ui.html or redirect to /ui at root without registering "GET /" in the mux
 	// ("GET /" conflicts with method-less patterns like /health in Go 1.22+ ServeMux)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" && r.Method == http.MethodGet {
-			s.handleUI(w, r)
+			if _, err := os.Stat("ui.html"); err == nil {
+				s.handleUI(w, r)
+			} else {
+				http.Redirect(w, r, "/ui", http.StatusFound)
+			}
 			return
 		}
 		mux.ServeHTTP(w, r)
@@ -726,7 +750,7 @@ func (s *Server) handleDeepResearch(w http.ResponseWriter, r *http.Request) {
 	orchestrator := research.NewOrchestrator(s.client, s.store, s.registry, nil)
 
 	// Create run ID
-	runID, err := s.store.CreateResearchRun(req.Query)
+	runID, err := s.store.CreateResearchRun(researchGoal)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to create run: %v", err))
 		return
@@ -821,6 +845,8 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 		runType = "agent"
 	} else if strings.HasPrefix(r.URL.Path, "/deep-research/") {
 		runType = "research"
+	} else if strings.HasPrefix(r.URL.Path, "/teacher/") {
+		runType = "teacher"
 	} else {
 		writeError(w, http.StatusBadRequest, "unknown run type")
 		return
@@ -828,7 +854,27 @@ func (s *Server) handleCancelRun(w http.ResponseWriter, r *http.Request) {
 
 	idStr := r.PathValue("id")
 	if idStr == "" {
+		idStr = r.URL.Query().Get("id")
+	}
+	if idStr == "" {
 		writeError(w, http.StatusBadRequest, "run id required")
+		return
+	}
+
+	if runType == "teacher" {
+		runKey := fmt.Sprintf("teacher_%s", idStr)
+		s.activeRunsMu.Lock()
+		cancel, exists := s.activeRuns[runKey]
+		if exists {
+			cancel()
+			delete(s.activeRuns, runKey)
+		}
+		s.activeRunsMu.Unlock()
+
+		if s.teacherOrchestrator != nil {
+			_ = s.teacherOrchestrator.Store().UpdateRunError(idStr, "Run cancelled by user")
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
 		return
 	}
 
@@ -956,4 +1002,401 @@ func (s *Server) loadNewsContext(query string) string {
 	}
 	slog.Info("News context injected from user profile", "topics", len(fields))
 	return ctx
+}
+
+// ──────────────────────────────────────────────────────────────
+// Teacher Agent API Handlers (Phases 9 & 10)
+// ──────────────────────────────────────────────────────────────
+
+type teacherStartRequest struct {
+	Goal  string `json:"goal"`
+	Topic string `json:"topic"`
+}
+
+func (s *Server) handleTeacherStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	var req teacherStartRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json request body")
+		return
+	}
+
+	goal := strings.TrimSpace(req.Goal)
+	if goal == "" {
+		goal = strings.TrimSpace(req.Topic)
+	}
+	if goal == "" {
+		writeError(w, http.StatusBadRequest, "field 'goal' or 'topic' is required")
+		return
+	}
+
+	run, err := s.teacherOrchestrator.Store().CreateRun(goal)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to initialize teacher run: %v", err))
+		return
+	}
+
+	res, err := s.teacherOrchestrator.ClarificationTurn(r.Context(), run.ID, "")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("clarification turn error: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+type teacherAnswerRequest struct {
+	RunID  string `json:"run_id"`
+	Answer string `json:"answer"`
+}
+
+func (s *Server) handleTeacherAnswer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	var req teacherAnswerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json request body")
+		return
+	}
+
+	req.RunID = strings.TrimSpace(req.RunID)
+	if req.RunID == "" {
+		writeError(w, http.StatusBadRequest, "field 'run_id' is required")
+		return
+	}
+
+	res, err := s.teacherOrchestrator.ClarificationTurn(r.Context(), req.RunID, req.Answer)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("clarification turn error: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+func (s *Server) handleTeacherBriefRouter(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		s.handleTeacherGetBrief(w, r)
+	case http.MethodPatch, http.MethodPost:
+		s.handleTeacherPatchBrief(w, r)
+	default:
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET or PATCH")
+	}
+}
+
+func (s *Server) handleTeacherGetBrief(w http.ResponseWriter, r *http.Request) {
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	runID := r.PathValue("run_id")
+	if runID == "" {
+		runID = r.URL.Query().Get("run_id")
+	}
+	if runID == "" {
+		writeError(w, http.StatusBadRequest, "parameter 'run_id' is required")
+		return
+	}
+
+	brief, err := s.teacherOrchestrator.GetBrief(runID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("brief not found for run %s: %v", runID, err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run_id": runID,
+		"brief":  brief,
+	})
+}
+
+func (s *Server) handleTeacherPatchBrief(w http.ResponseWriter, r *http.Request) {
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	runID := r.PathValue("run_id")
+	if runID == "" {
+		runID = r.URL.Query().Get("run_id")
+	}
+	if runID == "" {
+		writeError(w, http.StatusBadRequest, "parameter 'run_id' is required")
+		return
+	}
+
+	var bodyMap map[string]json.RawMessage
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to read body")
+		return
+	}
+
+	var brief teacher.LearningBrief
+	if err := json.Unmarshal(bodyBytes, &bodyMap); err == nil && bodyMap["brief"] != nil {
+		if err := json.Unmarshal(bodyMap["brief"], &brief); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid brief JSON: %v", err))
+			return
+		}
+	} else {
+		if err := json.Unmarshal(bodyBytes, &brief); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid brief JSON: %v", err))
+			return
+		}
+	}
+
+	if err := brief.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("brief validation error: %v", err))
+		return
+	}
+
+	patched, err := s.teacherOrchestrator.PatchBriefDirect(runID, &brief)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update brief: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run_id": runID,
+		"brief":  patched,
+	})
+}
+
+type teacherGenerateRequest struct {
+	RunID string `json:"run_id"`
+}
+
+func (s *Server) handleTeacherGenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	var req teacherGenerateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json request body")
+		return
+	}
+
+	req.RunID = strings.TrimSpace(req.RunID)
+	if req.RunID == "" {
+		writeError(w, http.StatusBadRequest, "field 'run_id' is required")
+		return
+	}
+
+	run, err := s.teacherOrchestrator.Store().GetRun(req.RunID)
+	if err != nil || run == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("teacher run %s not found", req.RunID))
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	runKey := fmt.Sprintf("teacher_%s", req.RunID)
+	s.activeRunsMu.Lock()
+	s.activeRuns[runKey] = cancel
+	s.activeRunsMu.Unlock()
+
+	go func() {
+		defer func() {
+			s.activeRunsMu.Lock()
+			delete(s.activeRuns, runKey)
+			s.activeRunsMu.Unlock()
+		}()
+		_, _ = s.teacherOrchestrator.GenerateReport(ctx, req.RunID)
+	}()
+
+	w.WriteHeader(http.StatusAccepted) // 202
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"run_id": req.RunID,
+		"status": "running",
+	})
+}
+
+func (s *Server) handleTeacherStream(w http.ResponseWriter, r *http.Request) {
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	runID := r.PathValue("run_id")
+	if runID == "" {
+		runID = r.URL.Query().Get("run_id")
+	}
+	if runID == "" {
+		writeError(w, http.StatusBadRequest, "run_id is required")
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	// If the run has already finished, emit terminal event immediately and exit
+	run, _ := s.teacherOrchestrator.Store().GetRun(runID)
+	if run != nil && (run.Status == teacher.RunStatusDone || run.Status == teacher.RunStatusError) {
+		if run.Status == teacher.RunStatusDone {
+			ev := teacher.StreamEvent{
+				RunID:     runID,
+				Event:     "done",
+				Data:      map[string]interface{}{"run_id": runID, "status": "done", "report_len": len(run.ReportMD)},
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+			}
+			fmt.Fprint(w, ev.FormatSSE())
+		} else {
+			ev := teacher.StreamEvent{
+				RunID:     runID,
+				Event:     "error",
+				Data:      map[string]string{"error_message": run.ErrorMessage},
+				Timestamp: time.Now().UTC().Format(time.RFC3339),
+			}
+			fmt.Fprint(w, ev.FormatSSE())
+		}
+		flusher.Flush()
+		return
+	}
+
+	eventCh, unsubscribe := s.teacherOrchestrator.Broadcaster().Subscribe(runID)
+	defer unsubscribe()
+
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	// Initial flush to establish SSE connection
+	flusher.Flush()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-ticker.C:
+			fmt.Fprint(w, ": keepalive\n\n")
+			flusher.Flush()
+		case ev, ok := <-eventCh:
+			if !ok {
+				return
+			}
+			fmt.Fprint(w, ev.FormatSSE())
+			flusher.Flush()
+			if ev.Event == "done" || ev.Event == "error" {
+				return
+			}
+		}
+	}
+}
+
+func (s *Server) handleTeacherReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use GET")
+		return
+	}
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	runID := r.PathValue("run_id")
+	if runID == "" {
+		runID = r.URL.Query().Get("run_id")
+	}
+	if runID == "" {
+		writeError(w, http.StatusBadRequest, "run_id is required")
+		return
+	}
+
+	run, err := s.teacherOrchestrator.Store().GetRun(runID)
+	if err != nil || run == nil {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("teacher run %s not found", runID))
+		return
+	}
+
+	outline, _ := s.teacherOrchestrator.Store().GetOutline(runID)
+	sections, _ := s.teacherOrchestrator.Store().GetSectionsForRun(runID)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run_id":       run.ID,
+		"raw_goal":     run.RawGoal,
+		"status":       run.Status,
+		"report_md":    run.ReportMD,
+		"brief":        run.LearningBrief,
+		"outline":      outline,
+		"sections":     sections,
+		"completed_at": run.CompletedAt,
+		"created_at":   run.CreatedAt,
+	})
+}
+
+type teacherRegenerateRequest struct {
+	RunID     string `json:"run_id"`
+	SectionID string `json:"section_id"`
+}
+
+func (s *Server) handleTeacherSectionRegenerate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed, use POST")
+		return
+	}
+	if s.teacherOrchestrator == nil {
+		writeError(w, http.StatusServiceUnavailable, "teacher orchestrator is not configured")
+		return
+	}
+
+	var req teacherRegenerateRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.SectionID == "" {
+		req.SectionID = r.PathValue("id")
+	}
+	if req.RunID == "" {
+		req.RunID = r.URL.Query().Get("run_id")
+	}
+	if req.SectionID == "" {
+		req.SectionID = r.URL.Query().Get("section_id")
+	}
+
+	if req.RunID == "" || req.SectionID == "" {
+		writeError(w, http.StatusBadRequest, "both 'run_id' and 'section_id' are required")
+		return
+	}
+
+	sec, updatedRun, err := s.teacherOrchestrator.RegenerateSection(r.Context(), req.RunID, req.SectionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("section regeneration failed: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"run_id":     req.RunID,
+		"section_id": req.SectionID,
+		"final_md":   sec.FinalMD,
+		"report_md":  updatedRun.ReportMD,
+	})
 }

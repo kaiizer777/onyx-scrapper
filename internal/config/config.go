@@ -62,6 +62,16 @@ type QualityConfig struct {
 	SourceAuthority     QualitySourceAuthorityConfig `yaml:"source_authority,omitempty"`
 }
 
+type TeacherConfig struct {
+	Enabled                  *bool    `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	MaxClarificationRounds   int      `yaml:"max_clarification_rounds,omitempty" json:"max_clarification_rounds,omitempty"`
+	MinClarificationRounds   int      `yaml:"min_clarification_rounds,omitempty" json:"min_clarification_rounds,omitempty"`
+	SectionWorkerConcurrency int      `yaml:"section_worker_concurrency,omitempty" json:"section_worker_concurrency,omitempty"`
+	CritiquePassLimit        int      `yaml:"critique_pass_limit,omitempty" json:"critique_pass_limit,omitempty"`
+	DiscoverySources         []string `yaml:"discovery_sources,omitempty" json:"discovery_sources,omitempty"`
+	DefaultDepth             string   `yaml:"default_depth,omitempty" json:"default_depth,omitempty"`
+}
+
 // TelegramWebhookConfig holds webhook-specific fields. Only used when
 // TelegramConfig.Mode == "webhook".
 type TelegramWebhookConfig struct {
@@ -120,6 +130,7 @@ type Config struct {
 	Discovery     *DiscoveryConfig `yaml:"discovery,omitempty"`
 	Quality       *QualityConfig  `yaml:"quality,omitempty"`
 	Telegram      *TelegramConfig `yaml:"telegram,omitempty"`
+	Teacher       *TeacherConfig  `yaml:"teacher,omitempty"`
 }
 
 // ActiveProviderConfig returns the ProviderConfig for the currently active
@@ -180,6 +191,59 @@ func (c *Config) IsTelegramEnabled() bool {
 		return false
 	}
 	return *c.Telegram.Enabled
+}
+
+// IsTeacherEnabled reports whether Teacher mode is enabled.
+func (c *Config) IsTeacherEnabled() bool {
+	if c == nil || c.Teacher == nil {
+		return true // enabled by default if not explicitly disabled
+	}
+	if c.Teacher.Enabled == nil {
+		return true
+	}
+	return *c.Teacher.Enabled
+}
+
+// GetTeacherConfig returns the teacher configuration populated with defaults.
+func (c *Config) GetTeacherConfig() TeacherConfig {
+	tc := TeacherConfig{
+		MaxClarificationRounds:   10,
+		MinClarificationRounds:   2,
+		SectionWorkerConcurrency: 4,
+		CritiquePassLimit:        2,
+		DiscoverySources:         []string{"searxng", "tinyfish", "jina"},
+		DefaultDepth:             "solid working understanding",
+	}
+	enabled := true
+	tc.Enabled = &enabled
+
+	if c == nil || c.Teacher == nil {
+		return tc
+	}
+
+	if c.Teacher.Enabled != nil {
+		tc.Enabled = c.Teacher.Enabled
+	}
+	if c.Teacher.MaxClarificationRounds > 0 {
+		tc.MaxClarificationRounds = c.Teacher.MaxClarificationRounds
+	}
+	if c.Teacher.MinClarificationRounds > 0 {
+		tc.MinClarificationRounds = c.Teacher.MinClarificationRounds
+	}
+	if c.Teacher.SectionWorkerConcurrency > 0 {
+		tc.SectionWorkerConcurrency = c.Teacher.SectionWorkerConcurrency
+	}
+	if c.Teacher.CritiquePassLimit > 0 {
+		tc.CritiquePassLimit = c.Teacher.CritiquePassLimit
+	}
+	if len(c.Teacher.DiscoverySources) > 0 {
+		tc.DiscoverySources = c.Teacher.DiscoverySources
+	}
+	if c.Teacher.DefaultDepth != "" {
+		tc.DefaultDepth = c.Teacher.DefaultDepth
+	}
+
+	return tc
 }
 
 func validateTelegram(t *TelegramConfig) error {
@@ -323,6 +387,7 @@ func LoadConfig(path string) (*Config, error) {
 		migrated.Discovery = full.Discovery
 		migrated.Quality = full.Quality
 		migrated.Telegram = full.Telegram
+		migrated.Teacher = full.Teacher
 
 		if err := validateTelegram(migrated.Telegram); err != nil {
 			return nil, err
@@ -457,6 +522,9 @@ func mergeConfig(existing, incoming *Config) *Config {
 	if incoming.Telegram != nil {
 		merged.Telegram = mergeTelegram(merged.Telegram, incoming.Telegram)
 	}
+	if incoming.Teacher != nil {
+		merged.Teacher = mergeTeacher(merged.Teacher, incoming.Teacher)
+	}
 
 	return &merged
 }
@@ -509,3 +577,35 @@ func mergeTelegram(existing, incoming *TelegramConfig) *TelegramConfig {
 	}
 	return &merged
 }
+
+func mergeTeacher(existing, incoming *TeacherConfig) *TeacherConfig {
+	if existing == nil {
+		copy := *incoming
+		return &copy
+	}
+	merged := *existing
+
+	if incoming.Enabled != nil {
+		merged.Enabled = incoming.Enabled
+	}
+	if incoming.MaxClarificationRounds != 0 {
+		merged.MaxClarificationRounds = incoming.MaxClarificationRounds
+	}
+	if incoming.MinClarificationRounds != 0 {
+		merged.MinClarificationRounds = incoming.MinClarificationRounds
+	}
+	if incoming.SectionWorkerConcurrency != 0 {
+		merged.SectionWorkerConcurrency = incoming.SectionWorkerConcurrency
+	}
+	if incoming.CritiquePassLimit != 0 {
+		merged.CritiquePassLimit = incoming.CritiquePassLimit
+	}
+	if len(incoming.DiscoverySources) > 0 {
+		merged.DiscoverySources = incoming.DiscoverySources
+	}
+	if incoming.DefaultDepth != "" {
+		merged.DefaultDepth = incoming.DefaultDepth
+	}
+	return &merged
+}
+

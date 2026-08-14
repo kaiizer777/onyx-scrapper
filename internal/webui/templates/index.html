@@ -11,6 +11,8 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <!-- html2pdf for PDF generation -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- Mermaid for Diagram rendering -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root {
     --bg-base: #06080f;
@@ -290,6 +292,7 @@
   .thread {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 36px 40px;
     display: flex;
     flex-direction: column;
@@ -303,7 +306,7 @@
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding-bottom: 24px;
+    padding-bottom: 160px;
   }
 
   /* 3D Glass User Bubble */
@@ -1463,8 +1466,9 @@
   .toggle-switch {
     position: relative;
     display: inline-block;
-    width: 26px;
+    width: 28px;
     height: 16px;
+    vertical-align: middle;
   }
 
   .toggle-switch input {
@@ -1472,7 +1476,6 @@
     opacity: 0;
     width: 0;
     height: 0;
-    pointer-events: none;
   }
 
   .toggle-slider {
@@ -1482,9 +1485,9 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: var(--bg-surface-hover);
-    border: 1px solid var(--border-lighter);
-    transition: .3s;
+    background-color: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 20px;
   }
 
@@ -1495,19 +1498,557 @@
     width: 10px;
     left: 2px;
     bottom: 2px;
-    background-color: var(--text-secondary);
-    transition: .3s;
+    background-color: #94a3b8;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 50%;
   }
 
-  input:checked + .toggle-slider {
-    background-color: var(--primary);
-    border-color: var(--primary);
+  .toggle-switch input:checked + .toggle-slider {
+    background: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
   }
 
-  input:checked + .toggle-slider:before {
-    transform: translateX(10px);
-    background-color: #fff;
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(12px);
+    background-color: #ffffff;
+  }
+
+  /* ── Teacher Agent UI Styles (Phases 10) ── */
+  .teacher-card {
+    background: linear-gradient(160deg, rgba(16, 22, 35, 0.95) 0%, rgba(10, 14, 23, 0.98) 100%);
+    border: 1px solid rgba(129, 140, 248, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 24px 28px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    width: 100%;
+    animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .teacher-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .teacher-header-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e0e7ff;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: -0.01em;
+  }
+
+  .teacher-round-badge {
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+  }
+
+  .teacher-question-text {
+    font-size: 15px;
+    font-weight: 500;
+    color: #ffffff;
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+
+  .teacher-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .teacher-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+    border-radius: 24px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+
+  .teacher-chip:hover {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .teacher-chip.selected {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(79, 70, 229, 0.4) 100%);
+    border-color: #818cf8;
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.35);
+  }
+
+  .teacher-chip-checkbox {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    transition: all 0.15s ease;
+  }
+
+  .teacher-chip.selected .teacher-chip-checkbox {
+    background: #818cf8;
+    border-color: #818cf8;
+    color: #0b0f19;
+  }
+
+  .teacher-input-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 12px;
+  }
+
+  .teacher-text-input {
+    flex: 1;
+    background: rgba(6, 9, 18, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #ffffff;
+    font-size: 13.5px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: all 0.2s;
+  }
+
+  .teacher-text-input:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    background: #090d18;
+  }
+
+  .teacher-btn-action {
+    background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: 10px;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 3px 0 #3730a3, 0 6px 14px rgba(99, 102, 241, 0.35);
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .teacher-btn-action:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 #3730a3, 0 2px 6px rgba(99, 102, 241, 0.3);
+  }
+
+  .teacher-override-bar {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .teacher-btn-start-now {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+
+  .teacher-btn-start-now:hover {
+    color: #e0e7ff;
+  }
+
+  /* Brief Review Form */
+  .brief-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .brief-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .brief-field.full-width {
+    grid-column: span 2;
+  }
+
+  .brief-field label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #a5b4fc;
+  }
+
+  .brief-input, .brief-select, .brief-textarea {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #ffffff;
+    font-size: 13px;
+    font-family: var(--font-sans);
+    outline: none;
+    transition: all 0.2s;
+    width: 100%;
+  }
+
+  .brief-input:focus, .brief-select:focus, .brief-textarea:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+  }
+
+  .brief-textarea {
+    resize: vertical;
+    min-height: 55px;
+  }
+
+  .brief-checkbox-row {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    padding-top: 4px;
+  }
+
+  .brief-check-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: #cbd5e1;
+    cursor: pointer;
+  }
+
+  .btn-generate-hero {
+    width: 100%;
+    background: linear-gradient(180deg, #6366f1 0%, #4338ca 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 12px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #312e81, 0 10px 25px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    letter-spacing: -0.01em;
+  }
+
+  .btn-generate-hero:hover {
+    filter: brightness(1.08);
+  }
+
+  .btn-generate-hero:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #312e81, 0 4px 10px rgba(99, 102, 241, 0.3);
+  }
+
+  /* Real-Time Generation Dashboard */
+  .gen-dashboard {
+    width: 100%;
+    background: linear-gradient(160deg, rgba(16, 22, 35, 0.95) 0%, rgba(10, 14, 23, 0.98) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+    margin-top: 16px;
+  }
+
+  .gen-progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 14px 0 20px 0;
+  }
+
+  .gen-progress-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #6366f1 0%, #38bdf8 50%, #34d399 100%);
+    border-radius: 10px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+  }
+
+  .gen-section-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .gen-sec-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.25s ease;
+  }
+
+  .gen-sec-item.active {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 14px rgba(99, 102, 241, 0.15);
+  }
+
+  .gen-sec-item.done {
+    background: rgba(52, 211, 153, 0.05);
+    border-color: rgba(52, 211, 153, 0.25);
+  }
+
+  .gen-sec-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .gen-sec-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #f8fafc;
+  }
+
+  .gen-sec-obj {
+    font-size: 11.5px;
+    color: #94a3b8;
+  }
+
+  .gen-badge {
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .gen-badge.pending { background: rgba(148, 163, 184, 0.1); color: #94a3b8; }
+  .gen-badge.researching { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+  .gen-badge.drafting { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+  .gen-badge.critiquing { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+  .gen-badge.done { background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3); }
+
+  /* Finished Report Layout with Sticky TOC on the RIGHT (Report matches 100% input bar width) */
+  .teacher-report-layout {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    margin-top: 16px;
+    align-items: flex-start;
+    box-sizing: border-box;
+    position: relative;
+  }
+
+  /* Report main content takes full 100% width matching input bar */
+  .teacher-report-main {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    order: 1;
+    box-sizing: border-box;
+  }
+
+  .teacher-toc-sidebar {
+    width: 200px;
+    flex: 0 0 200px;
+    order: 2;
+    position: sticky;
+    top: 20px;
+    margin-left: 8px;
+    margin-right: -208px;
+    align-self: flex-start;
+    background: rgba(16, 22, 35, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 14px 10px;
+    backdrop-filter: blur(12px);
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    z-index: 5;
+  }
+
+  .teacher-toc-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .teacher-toc-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+  }
+
+  .teacher-toc-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #a5b4fc;
+    margin-bottom: 8px;
+    padding-left: 6px;
+  }
+
+  .teacher-toc-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .teacher-toc-nav a {
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 11px;
+    line-height: 1.35;
+    padding: 5px 6px;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    display: block;
+    word-break: break-word;
+    white-space: normal;
+  }
+
+  .teacher-toc-nav a:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .teacher-toc-nav a.active {
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.15);
+    border-left: 2px solid #38bdf8;
+    font-weight: 600;
+  }
+
+  @media (max-width: 1350px) {
+    .teacher-report-layout {
+      flex-direction: column;
+    }
+    .teacher-toc-sidebar {
+      width: 100%;
+      max-width: 100%;
+      flex: 1 1 auto;
+      margin-left: 0;
+      margin-right: 0;
+      position: static;
+      margin-bottom: 20px;
+      order: -1;
+      max-height: 220px;
+    }
+  }
+
+  .teacher-sec-block {
+    margin-bottom: 28px;
+    scroll-margin-top: 24px;
+  }
+
+  .teacher-sec-divider {
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin: 28px 0;
+  }
+
+  .teacher-sec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+    scroll-margin-top: 24px;
+  }
+
+  .teacher-sec-header h2 {
+    margin: 0 !important;
+    font-size: 19px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+  }
+
+  .btn-regen-section {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-regen-section:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #e0e7ff;
+  }
+
+  .mermaid {
+    background: #090d16;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    margin: 18px 0;
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
   }
 </style>
 </head>
@@ -1762,7 +2303,14 @@
             </div>
             <svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
-
+          <div class="mode-option" id="mode-opt-teacher" onclick="setMode('teacher')">
+            <div class="mode-opt-icon">🎓</div>
+            <div class="mode-opt-info">
+              <div class="mode-opt-title">Teacher</div>
+              <div class="mode-opt-desc">Personalized learning guides, DAG outline &amp; critiques</div>
+            </div>
+            <svg class="mode-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+          </div>
         </div>
         <div style="position: relative; display: inline-block; margin-left: 8px;">
           <button class="mode-selector" id="model-selector-btn" onclick="toggleModelDropdown(event)" aria-haspopup="true" aria-expanded="false" title="Select Active Model">
@@ -1778,7 +2326,7 @@
           <label class="enhance-toggle-label" title="Enable to automatically improve and structure your prompt using LLM before submission">
             ⚡ Enhance
             <div class="toggle-switch">
-              <input type="checkbox" id="enhance-prompt-toggle" checked>
+              <input type="checkbox" id="enhance-prompt-toggle" checked onchange="localStorage.setItem('onyx_enhance_prompt', this.checked)">
               <span class="toggle-slider"></span>
             </div>
           </label>
@@ -1841,6 +2389,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } else {
     loadHistory();
+  }
+  
+  // Restore Enhance toggle preference
+  const savedEnhance = localStorage.getItem('onyx_enhance_prompt');
+  if (savedEnhance !== null) {
+    const enhanceEl = document.getElementById('enhance-prompt-toggle');
+    if (enhanceEl) enhanceEl.checked = (savedEnhance === 'true');
   }
   
   // Load settings once to populate dropdown
@@ -1937,20 +2492,25 @@ function setMode(mode) {
   selectedMode = mode;
   const isResearch = mode === 'research';
   const isAgent = mode === 'agent';
+  const isTeacher = mode === 'teacher';
 
   const modeIcon = document.getElementById('current-mode-icon');
   const modeLabel = document.getElementById('current-mode-label');
-  if (modeIcon) modeIcon.textContent = isResearch ? '🔍' : '⚡';
-  if (modeLabel) modeLabel.textContent = isResearch ? 'Deep Research' : 'Autonomous Agent';
+  if (modeIcon) modeIcon.textContent = isTeacher ? '🎓' : (isResearch ? '🔍' : '⚡');
+  if (modeLabel) modeLabel.textContent = isTeacher ? 'Teacher' : (isResearch ? 'Deep Research' : 'Autonomous Agent');
 
   const optResearch = document.getElementById('mode-opt-research');
   const optAgent = document.getElementById('mode-opt-agent');
+  const optTeacher = document.getElementById('mode-opt-teacher');
   if (optResearch) optResearch.classList.toggle('active', isResearch);
   if (optAgent) optAgent.classList.toggle('active', isAgent);
+  if (optTeacher) optTeacher.classList.toggle('active', isTeacher);
 
   const input = document.getElementById('query-input');
   if (input) {
-    if (isResearch) {
+    if (isTeacher) {
+      input.placeholder = 'What do you want to learn? (e.g., Explain Transformer Self-Attention, How Paxos works, Causes of WWI...)';
+    } else if (isResearch) {
       input.placeholder = 'Research any topic, analyze web pages, or generate reports...';
     } else {
       input.placeholder = 'Instruct Onyx Agent to perform a web task...';
@@ -2009,12 +2569,14 @@ function renderHistoryList() {
     div.className = `history-item ${item.id === currentRunId && item.type === currentRunType ? 'active' : ''}`;
     div.onclick = () => loadRun(item.type, item.id);
     
+    const isTeacher = item.type === 'teacher';
+    const typeBadge = isTeacher ? '🎓 teacher' : item.type;
     const date = new Date(item.started_at).toLocaleDateString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
     div.innerHTML = `
       <div class="h-goal" title="${escapeHtml(item.goal)}">${escapeHtml(item.goal)}</div>
       <div class="h-meta">
         <span class="badge ${item.status}">${item.status}</span>
-        <span class="h-type">${item.type}</span>
+        <span class="h-type">${typeBadge}</span>
         <span class="h-date">${date}</span>
       </div>
     `;
@@ -2043,6 +2605,10 @@ async function loadHistory() {
 
 function startNew() {
   stopPolling();
+  if (teacherEventSource) {
+    teacherEventSource.close();
+    teacherEventSource = null;
+  }
   currentRunId = null;
   currentRunType = null;
   
@@ -2083,10 +2649,18 @@ function setStreamingState(isStreaming) {
 
 async function stopRun() {
   if (!currentRunId || !currentRunType) return;
-  const endpoint = currentRunType === 'agent'
-    ? `/agent/runs/${currentRunId}/cancel`
-    : `/deep-research/${currentRunId}/cancel`;
+  let endpoint = `/agent/runs/${currentRunId}/cancel`;
+  if (currentRunType === 'research') {
+    endpoint = `/deep-research/${currentRunId}/cancel`;
+  } else if (currentRunType === 'teacher') {
+    endpoint = `/teacher/runs/${currentRunId}/cancel`;
+  }
   
+  if (teacherEventSource) {
+    teacherEventSource.close();
+    teacherEventSource = null;
+  }
+
   // Optimistically stop
   setStreamingState(false);
   stopPolling();
@@ -2095,14 +2669,22 @@ async function stopRun() {
     const res = await fetch(endpoint, { method: 'POST' });
     if (!res.ok) throw new Error(await res.text());
     
-    // Wait briefly and poll one last time to get the official cancelled status
-    setTimeout(() => {
-      pollStatus();
-    }, 500);
+    if (currentRunType === 'teacher') {
+      const thread = document.getElementById('thread');
+      const cancelDiv = document.createElement('div');
+      cancelDiv.className = 'error-block';
+      cancelDiv.textContent = 'Teacher generation was cancelled.';
+      thread.appendChild(cancelDiv);
+      scrollToBottom();
+      loadHistory();
+    } else {
+      setTimeout(() => {
+        pollStatus();
+      }, 500);
+    }
   } catch (err) {
     console.error("Failed to cancel run", err);
-    // On error, resume polling so UI doesn't get stuck
-    pollStatus();
+    if (currentRunType !== 'teacher') pollStatus();
   }
 }
 
@@ -2137,9 +2719,16 @@ async function submitQuery() {
       
       if (enhanceRes.ok) {
         const enhanceData = await enhanceRes.json();
-        if (enhanceData.enhanced && enhanceData.enhanced_prompt) {
+        if (enhanceData.enhanced && enhanceData.enhanced_prompt && enhanceData.enhanced_prompt.trim() !== rawQuery.trim()) {
           finalQuery = enhanceData.enhanced_prompt;
-          userBubbleDiv.textContent = finalQuery;
+          userBubbleDiv.innerHTML = `
+            <div class="enhanced-badge">⚡ Enhanced Prompt</div>
+            <div class="enhanced-text">${escapeHtml(finalQuery)}</div>
+            <details class="original-prompt-collapsible">
+              <summary>Original Prompt</summary>
+              <div style="margin-top: 6px; color: #94a3b8;">${escapeHtml(rawQuery)}</div>
+            </details>
+          `;
         }
       }
     } catch (e) {
@@ -2151,6 +2740,9 @@ async function submitQuery() {
     let endpoint, bodyPayload;
     if (type === 'agent') {
       endpoint = '/agent/async';
+      bodyPayload = { goal: finalQuery };
+    } else if (type === 'teacher') {
+      endpoint = '/teacher/start';
       bodyPayload = { goal: finalQuery };
     } else {
       endpoint = '/deep-research';
@@ -2170,7 +2762,11 @@ async function submitQuery() {
     userBubbleDiv.id = 'user-bubble-' + currentRunId;
     window.history.replaceState(null, null, `#${type}/${currentRunId}`);
     
-    pollStatus();
+    if (type === 'teacher') {
+      handleTeacherResponse(data);
+    } else {
+      pollStatus();
+    }
     loadHistory(); // refresh sidebar to show new item
     
   } catch (err) {
@@ -2187,27 +2783,12 @@ async function submitQuery() {
   }
 }
 
-function startNew() {
+async function loadRun(type, id) {
   stopPolling();
-  currentRunId = null;
-  currentRunType = null;
-  window.history.replaceState(null, null, '#');
-  document.getElementById('query-input').value = '';
-  document.getElementById('query-input').style.height = 'auto';
-  
-  const thread = document.getElementById('thread');
-  Array.from(thread.children).forEach(c => {
-    if (c.id !== 'empty-state') c.remove();
-  });
-  
-  document.getElementById('empty-state').style.display = 'flex';
-  
-  document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
-  document.getElementById('query-input').focus();
-}
-
-function loadRun(type, id) {
-  stopPolling();
+  if (teacherEventSource) {
+    teacherEventSource.close();
+    teacherEventSource = null;
+  }
   currentRunType = type;
   currentRunId = id;
   
@@ -2221,7 +2802,48 @@ function loadRun(type, id) {
   });
   
   loadHistory(); // update active state
-  pollStatus();
+
+  if (type === 'teacher') {
+    try {
+      const res = await fetch(`/teacher/report/${id}`);
+      if (!res.ok) throw new Error("Failed to fetch teacher run data");
+      const reportData = await res.json();
+      
+      const userBubble = appendUserBubble(reportData.raw_goal || 'Teacher Run');
+      userBubble.id = 'user-bubble-' + id;
+
+      if (reportData.status === 'done' && reportData.report_md) {
+        setStreamingState(false);
+        renderTeacherReport(reportData);
+      } else if (reportData.status === 'brief_ready' && reportData.brief) {
+        setStreamingState(false);
+        renderTeacherBrief(reportData.brief);
+      } else if (reportData.status === 'clarifying') {
+        setStreamingState(false);
+        const ansRes = await fetch('/teacher/answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ run_id: id, answer: "" })
+        });
+        if (ansRes.ok) {
+          const ansData = await ansRes.json();
+          handleTeacherResponse(ansData);
+        }
+      } else {
+        setStreamingState(true);
+        startTeacherStream(id);
+      }
+    } catch (err) {
+      console.error("Error loading teacher run", err);
+      const errBlock = document.createElement('div');
+      errBlock.className = 'error-block';
+      errBlock.textContent = "Failed to load run: " + err.message;
+      thread.appendChild(errBlock);
+      scrollToBottom();
+    }
+  } else {
+    pollStatus();
+  }
 }
 
 function stopPolling() {
@@ -2273,16 +2895,17 @@ async function pollStatus() {
 function parseReportMarkdown(mdText) {
   if (!mdText) return '';
   try {
-    const renderer = new marked.Renderer();
-    renderer.link = function(href, title, text) {
-      return ''; // Completely remove links and their text
-    };
-    let html = marked.parse(mdText, { renderer: renderer });
-    html = html.replace(/<a\b[^>]*>.*?<\/a>/gi, ''); // Remove raw a-tags completely
-    html = html.replace(/\[\d+\]/g, ''); // Also strip raw [1], [2] citations if any
-    return html;
+    if (typeof marked !== 'undefined') {
+      if (typeof marked.parse === 'function') {
+        return marked.parse(mdText);
+      } else if (typeof marked === 'function') {
+        return marked(mdText);
+      }
+    }
+    return mdText;
   } catch (e) {
-    return mdText.replace(/<a\b[^>]*>.*?<\/a>/gi, '').replace(/\[\d+\]/g, '');
+    console.error("Marked parse error:", e);
+    return mdText;
   }
 }
 
@@ -3461,6 +4084,851 @@ function showTelegramStatus(msg, type) {
   if (type === "success") el.style.color = "var(--status-done)";
   else if (type === "error") el.style.color = "var(--status-err)";
   else el.style.color = "var(--text-secondary)";
+}
+
+// ──────────────────────────────────────────────────────────────
+// Teacher Agent Frontend Logic & Mermaid Integration (Phase 10)
+// ──────────────────────────────────────────────────────────────
+
+let teacherEventSource = null;
+let selectedTeacherMultiOptions = new Set();
+
+if (typeof mermaid !== 'undefined') {
+  try {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#090d16',
+        primaryColor: '#6366f1',
+        primaryTextColor: '#f8fafc',
+        primaryBorderColor: '#4f46e5',
+        lineColor: '#818cf8',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#0f172a'
+      }
+    });
+  } catch (e) {
+    console.warn("Mermaid init notice:", e);
+  }
+}
+
+function handleTeacherResponse(data) {
+  if (!data) return;
+  if (data.status === 'clarifying') {
+    setStreamingState(false);
+    renderTeacherClarification(data);
+  } else if (data.status === 'brief_ready') {
+    setStreamingState(false);
+    renderTeacherBrief(data.brief);
+  } else if (data.status === 'done') {
+    setStreamingState(false);
+    renderTeacherReport(data);
+  } else {
+    setStreamingState(true);
+    startTeacherStream(data.run_id || currentRunId);
+  }
+}
+
+function renderTeacherClarification(data) {
+  const thread = document.getElementById('thread');
+  
+  // Remove existing active clarification forms
+  document.querySelectorAll('.teacher-card-active').forEach(el => {
+    el.classList.remove('teacher-card-active');
+    el.querySelectorAll('button, input').forEach(btn => btn.disabled = true);
+  });
+
+  const card = document.createElement('div');
+  card.className = 'teacher-card teacher-card-active';
+  card.id = `teacher-clarification-${data.round || 1}`;
+
+  const q = data.question || { text: 'How can I best tailor this learning guide for you?', input_kind: 'free_text' };
+  const roundNum = data.round || 1;
+  const isSingle = q.input_kind === 'single_select';
+  const isMulti = q.input_kind === 'multi_select';
+  const hasOptions = Array.isArray(q.options) && q.options.length > 0;
+
+  selectedTeacherMultiOptions.clear();
+
+  let optionsHtml = '';
+  if (hasOptions) {
+    optionsHtml = `<div class="teacher-chip-group" id="teacher-chips-${roundNum}">`;
+    q.options.forEach(opt => {
+      const escapedOpt = escapeHtml(opt);
+      if (isSingle) {
+        optionsHtml += `<div class="teacher-chip" onclick="selectTeacherSingleChip('${escapedOpt}')">${escapedOpt}</div>`;
+      } else if (isMulti) {
+        optionsHtml += `<div class="teacher-chip" onclick="toggleTeacherMultiChip(this, '${escapedOpt}')">
+          <span class="teacher-chip-checkbox">✓</span>
+          <span>${escapedOpt}</span>
+        </div>`;
+      }
+    });
+    optionsHtml += `</div>`;
+  }
+
+  let actionHtml = '';
+  if (isMulti) {
+    actionHtml += `
+      <div style="margin-bottom: 10px;">
+        <button class="teacher-btn-action" onclick="submitTeacherMultiAnswer()">
+          <span>Confirm Selection</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px; height:13px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </button>
+      </div>
+    `;
+  }
+
+  const overrideHtml = roundNum >= 1 ? `
+    <div class="teacher-override-bar">
+      <button type="button" class="teacher-btn-start-now" onclick="submitTeacherAnswer('__start_now__')">
+        <span>Skip questions &amp; start guide generation</span> ➔
+      </button>
+    </div>
+  ` : '';
+
+  card.innerHTML = `
+    <div class="teacher-header">
+      <div class="teacher-header-title">
+        <span style="font-size:16px;">🎓</span>
+        <span>Teacher Clarification</span>
+      </div>
+      <div class="teacher-round-badge">Round ${roundNum}</div>
+    </div>
+    <div class="teacher-question-text">${escapeHtml(q.text)}</div>
+    ${optionsHtml}
+    ${actionHtml}
+    <div class="teacher-input-container">
+      <input type="text" class="teacher-text-input" id="teacher-answer-input-${roundNum}" placeholder="Type your custom response or specify further..." onkeydown="if(event.key==='Enter') submitTeacherInputAnswer(${roundNum})" />
+      <button class="teacher-btn-action" onclick="submitTeacherInputAnswer(${roundNum})">
+        <span>Send</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px; height:13px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </div>
+    ${overrideHtml}
+  `;
+
+  thread.appendChild(card);
+  scrollToBottom();
+  const inputEl = document.getElementById(`teacher-answer-input-${roundNum}`);
+  if (inputEl) inputEl.focus();
+}
+
+function selectTeacherSingleChip(val) {
+  submitTeacherAnswer(val);
+}
+
+function toggleTeacherMultiChip(el, val) {
+  if (selectedTeacherMultiOptions.has(val)) {
+    selectedTeacherMultiOptions.delete(val);
+    el.classList.remove('selected');
+  } else {
+    selectedTeacherMultiOptions.add(val);
+    el.classList.add('selected');
+  }
+}
+
+function submitTeacherMultiAnswer() {
+  const selectedArr = Array.from(selectedTeacherMultiOptions);
+  const inputVal = (document.querySelector('.teacher-card-active .teacher-text-input')?.value || '').trim();
+  if (inputVal) selectedArr.push(inputVal);
+  if (selectedArr.length === 0) return;
+  submitTeacherAnswer(selectedArr.join(', '));
+}
+
+function submitTeacherInputAnswer(roundNum) {
+  const input = document.getElementById(`teacher-answer-input-${roundNum}`);
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+  submitTeacherAnswer(val);
+}
+
+async function submitTeacherAnswer(answerText) {
+  if (!currentRunId) return;
+
+  // Disable active clarification inputs
+  document.querySelectorAll('.teacher-card-active').forEach(el => {
+    el.classList.remove('teacher-card-active');
+    el.querySelectorAll('button, input').forEach(btn => btn.disabled = true);
+  });
+
+  appendUserBubble(answerText === '__start_now__' ? 'Start generating guide now' : answerText);
+
+  try {
+    const res = await fetch('/teacher/answer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        run_id: currentRunId,
+        answer: answerText
+      })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    handleTeacherResponse(data);
+  } catch (err) {
+    const thread = document.getElementById('thread');
+    const errBlock = document.createElement('div');
+    errBlock.className = 'error-block';
+    errBlock.textContent = "Error answering question: " + err.message;
+    thread.appendChild(errBlock);
+    scrollToBottom();
+  }
+}
+
+function renderTeacherBrief(brief) {
+  const thread = document.getElementById('thread');
+  const card = document.createElement('div');
+  card.className = 'teacher-card';
+  card.id = `teacher-brief-card-${currentRunId}`;
+
+  const b = brief || {};
+  const prefs = b.format_preferences || {};
+
+  card.innerHTML = `
+    <div class="teacher-header">
+      <div class="teacher-header-title">
+        <span style="font-size:16px;">📋</span>
+        <span>Learning Brief Review</span>
+      </div>
+      <div class="teacher-round-badge" style="background:rgba(52,211,153,0.15); color:#34d399; border-color:rgba(52,211,153,0.3);">Brief Ready</div>
+    </div>
+    <p style="font-size:13px; color:#94a3b8; margin-bottom:16px; line-height:1.4;">
+      Review your personalized curriculum blueprint below. You can refine any parameters before generation starts.
+    </p>
+
+    <div class="brief-grid">
+      <div class="brief-field">
+        <label>Topic</label>
+        <input type="text" class="brief-input" id="tb-topic" value="${escapeHtml(b.topic || '')}" />
+      </div>
+      <div class="brief-field">
+        <label>Domain</label>
+        <input type="text" class="brief-input" id="tb-domain" value="${escapeHtml(b.domain || '')}" />
+      </div>
+
+      <div class="brief-field">
+        <label>Learner Level</label>
+        <select class="brief-select" id="tb-level">
+          <option value="beginner" ${b.learner_level === 'beginner' ? 'selected' : ''}>Beginner</option>
+          <option value="intermediate" ${b.learner_level === 'intermediate' ? 'selected' : ''}>Intermediate</option>
+          <option value="advanced" ${b.learner_level === 'advanced' ? 'selected' : ''}>Advanced</option>
+          <option value="expert" ${b.learner_level === 'expert' ? 'selected' : ''}>Expert</option>
+        </select>
+      </div>
+
+      <div class="brief-field">
+        <label>Target Depth</label>
+        <select class="brief-select" id="tb-depth">
+          <option value="overview" ${b.depth === 'overview' ? 'selected' : ''}>Overview</option>
+          <option value="working_understanding" ${b.depth === 'working_understanding' ? 'selected' : ''}>Working Understanding</option>
+          <option value="deep_dive" ${b.depth === 'deep_dive' ? 'selected' : ''}>Deep Dive</option>
+        </select>
+      </div>
+
+      <div class="brief-field full-width">
+        <label>Primary Motivation / Goal</label>
+        <input type="text" class="brief-input" id="tb-motivation" value="${escapeHtml(b.motivation || '')}" />
+      </div>
+
+      <div class="brief-field full-width">
+        <label>Known Reference Points (Analogies &amp; Concepts you know)</label>
+        <input type="text" class="brief-input" id="tb-reference-points" value="${escapeHtml((b.known_reference_points || []).join(', '))}" placeholder="e.g. Python, SQL, REST APIs" />
+      </div>
+
+      <div class="brief-field">
+        <label>Explicit Scope In (Focus Areas)</label>
+        <textarea class="brief-textarea" id="tb-scope-in" placeholder="Comma-separated concepts...">${escapeHtml((b.explicit_scope_in || []).join(', '))}</textarea>
+      </div>
+
+      <div class="brief-field">
+        <label>Explicit Scope Out (Avoid)</label>
+        <textarea class="brief-textarea" id="tb-scope-out" placeholder="Comma-separated concepts...">${escapeHtml((b.explicit_scope_out || []).join(', '))}</textarea>
+      </div>
+
+      <div class="brief-field full-width">
+        <label>Format Preferences</label>
+        <div class="brief-checkbox-row">
+          <label class="brief-check-label">
+            <input type="checkbox" id="tb-wants-diagrams" ${prefs.wants_diagrams !== false ? 'checked' : ''} />
+            <span>Include Visual Architecture &amp; Mermaid Diagrams</span>
+          </label>
+          <label class="brief-check-label">
+            <input type="checkbox" id="tb-wants-code" ${prefs.wants_code_examples !== false ? 'checked' : ''} />
+            <span>Include Concrete Code Examples</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="btn-generate-hero" onclick="saveAndGenerateTeacherReport()">
+      <span>Looks Right → Generate Guide</span>
+      <span style="font-size:18px;">🎓</span>
+    </button>
+  `;
+
+  thread.appendChild(card);
+  scrollToBottom();
+}
+
+async function saveAndGenerateTeacherReport() {
+  if (!currentRunId) return;
+
+  const btn = document.querySelector(`#teacher-brief-card-${currentRunId} .btn-generate-hero`);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>Starting Generation Pipeline...</span>`;
+  }
+
+  const parseList = str => (str || '').split(',').map(s => s.trim()).filter(Boolean);
+
+  const mutatedBrief = {
+    topic: document.getElementById('tb-topic')?.value?.trim() || '',
+    domain: document.getElementById('tb-domain')?.value?.trim() || '',
+    learner_level: document.getElementById('tb-level')?.value || 'intermediate',
+    depth: document.getElementById('tb-depth')?.value || 'working_understanding',
+    motivation: document.getElementById('tb-motivation')?.value?.trim() || '',
+    known_reference_points: parseList(document.getElementById('tb-reference-points')?.value),
+    explicit_scope_in: parseList(document.getElementById('tb-scope-in')?.value),
+    explicit_scope_out: parseList(document.getElementById('tb-scope-out')?.value),
+    format_preferences: {
+      length: 'medium',
+      wants_diagrams: document.getElementById('tb-wants-diagrams')?.checked ?? true,
+      wants_code_examples: document.getElementById('tb-wants-code')?.checked ?? true
+    }
+  };
+
+  try {
+    // 1. PATCH brief
+    await fetch(`/teacher/brief/${currentRunId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mutatedBrief)
+    });
+
+    // 2. Trigger generation
+    const genRes = await fetch('/teacher/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: currentRunId })
+    });
+
+    if (!genRes.ok) throw new Error(await genRes.text());
+
+    // 3. Switch to real-time generation dashboard
+    setStreamingState(true);
+    startTeacherStream(currentRunId);
+
+  } catch (err) {
+    console.error("Failed to start generation", err);
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = `<span>Retry Generation 🎓</span>`;
+    }
+    const thread = document.getElementById('thread');
+    const errBlock = document.createElement('div');
+    errBlock.className = 'error-block';
+    errBlock.textContent = "Failed to launch pipeline: " + err.message;
+    thread.appendChild(errBlock);
+    scrollToBottom();
+  }
+}
+
+function startTeacherStream(runID) {
+  if (teacherEventSource) {
+    teacherEventSource.close();
+    teacherEventSource = null;
+  }
+
+  const thread = document.getElementById('thread');
+  let dash = document.getElementById(`teacher-dashboard-${runID}`);
+  if (!dash) {
+    dash = document.createElement('div');
+    dash.className = 'gen-dashboard';
+    dash.id = `teacher-dashboard-${runID}`;
+    dash.innerHTML = `
+      <div class="teacher-header">
+        <div class="teacher-header-title">
+          <span style="font-size:16px;">⚡</span>
+          <span>Crafting Comprehensive Learning Guide</span>
+        </div>
+        <div id="gen-overall-badge-${runID}" class="gen-badge researching">0% Complete</div>
+      </div>
+      <div class="gen-progress-bar-bg">
+        <div class="gen-progress-bar-fill" id="gen-bar-fill-${runID}"></div>
+      </div>
+      <div style="font-size:12.5px; color:#cbd5e1; margin-bottom:14px;" id="gen-ticker-${runID}">
+        Generating dependency-aware curriculum outline...
+      </div>
+      <div class="gen-section-list" id="gen-sec-list-${runID}"></div>
+    `;
+    thread.appendChild(dash);
+    scrollToBottom();
+  }
+
+  const sectionsState = new Map();
+  let totalSections = 0;
+
+  function updateProgress() {
+    let doneCount = 0;
+    sectionsState.forEach(s => {
+      if (s.status === 'done') doneCount++;
+    });
+    const percent = totalSections > 0 ? Math.round((doneCount / totalSections) * 100) : 5;
+    const bar = document.getElementById(`gen-bar-fill-${runID}`);
+    const badge = document.getElementById(`gen-overall-badge-${runID}`);
+    if (bar) bar.style.width = `${Math.max(5, percent)}%`;
+    if (badge) badge.textContent = `${percent}% Complete`;
+  }
+
+  teacherEventSource = new EventSource(`/teacher/stream/${runID}`);
+
+  teacherEventSource.onmessage = e => {
+    try {
+      const payload = JSON.parse(e.data);
+      const evName = payload.event;
+      const data = payload.data;
+      const ticker = document.getElementById(`gen-ticker-${runID}`);
+      const list = document.getElementById(`gen-sec-list-${runID}`);
+
+      if (evName === 'outline_ready') {
+        const sections = data || [];
+        totalSections = sections.length;
+        if (list) {
+          list.innerHTML = '';
+          sections.forEach(sec => {
+            sectionsState.set(sec.id, { title: sec.title, status: 'pending' });
+            const item = document.createElement('div');
+            item.className = 'gen-sec-item';
+            item.id = `gen-sec-row-${sec.id}`;
+            item.innerHTML = `
+              <div class="gen-sec-info">
+                <div class="gen-sec-title">${escapeHtml(sec.title)}</div>
+                <div class="gen-sec-obj">${escapeHtml(sec.learning_objective || '')}</div>
+              </div>
+              <div class="gen-badge pending" id="gen-sec-badge-${sec.id}">⏳ Pending</div>
+            `;
+            list.appendChild(item);
+          });
+        }
+        if (ticker) ticker.textContent = `Outline generated: ${totalSections} sequential sections. Commencing research & drafting...`;
+        updateProgress();
+      } else if (evName === 'section_researching') {
+        const secId = data.section_id;
+        const row = document.getElementById(`gen-sec-row-${secId}`);
+        const badge = document.getElementById(`gen-sec-badge-${secId}`);
+        if (row) row.className = 'gen-sec-item active';
+        if (badge) {
+          badge.className = 'gen-badge researching';
+          badge.textContent = '🔍 Researching';
+        }
+        if (ticker) ticker.textContent = `Researching verified sources for: ${data.title || secId}...`;
+      } else if (evName === 'section_drafted') {
+        const secId = data.section_id;
+        const badge = document.getElementById(`gen-sec-badge-${secId}`);
+        if (badge) {
+          badge.className = 'gen-badge drafting';
+          badge.textContent = '✍️ Drafted';
+        }
+      } else if (evName === 'section_critiquing') {
+        const secId = data.section_id;
+        const badge = document.getElementById(`gen-sec-badge-${secId}`);
+        if (badge) {
+          badge.className = 'gen-badge critiquing';
+          badge.textContent = '🧐 Critiquing';
+        }
+      } else if (evName === 'section_revised') {
+        const secId = data.section_id;
+        const badge = document.getElementById(`gen-sec-badge-${secId}`);
+        if (badge) {
+          badge.className = 'gen-badge critiquing';
+          badge.textContent = `🧐 Critiquing (Rev ${data.revision_count || 1})`;
+        }
+      } else if (evName === 'section_done') {
+        const secId = data.section_id;
+        const row = document.getElementById(`gen-sec-row-${secId}`);
+        const badge = document.getElementById(`gen-sec-badge-${secId}`);
+        if (row) row.className = 'gen-sec-item done';
+        if (badge) {
+          badge.className = 'gen-badge done';
+          badge.textContent = '✅ Done';
+        }
+        const state = sectionsState.get(secId);
+        if (state) state.status = 'done';
+        updateProgress();
+      } else if (evName === 'assembling') {
+        if (ticker) ticker.textContent = 'Assembling final learning guide, glossary, and table of contents...';
+      } else if (evName === 'done') {
+        if (teacherEventSource) {
+          teacherEventSource.close();
+          teacherEventSource = null;
+        }
+        setStreamingState(false);
+        fetch(`/teacher/report/${runID}`)
+          .then(r => r.json())
+          .then(repData => renderTeacherReport(repData))
+          .catch(err => console.error("Error loading final report", err));
+      } else if (evName === 'error') {
+        if (teacherEventSource) {
+          teacherEventSource.close();
+          teacherEventSource = null;
+        }
+        setStreamingState(false);
+        const errBlock = document.createElement('div');
+        errBlock.className = 'error-block';
+        errBlock.textContent = `Pipeline error: ${data.error_message || 'Unknown error'}`;
+        thread.appendChild(errBlock);
+        scrollToBottom();
+      }
+    } catch (err) {
+      console.warn("Error processing SSE message:", err);
+    }
+  };
+
+  teacherEventSource.onerror = err => {
+    console.warn("SSE connection closed or interrupted:", err);
+  };
+}
+
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function renderTeacherReport(reportData) {
+  const thread = document.getElementById('thread');
+  const runID = reportData.run_id;
+
+  let reportContainer = document.getElementById(`teacher-report-${runID}`);
+  if (reportContainer) reportContainer.remove();
+
+  reportContainer = document.createElement('div');
+  reportContainer.className = 'report-container';
+  reportContainer.id = `teacher-report-${runID}`;
+
+  const outline = reportData.outline || [];
+  const sections = reportData.sections || [];
+  const sectionsMap = {};
+  sections.forEach(s => {
+    if (s.outline_id) sectionsMap[s.outline_id] = s;
+  });
+
+  // Build Table of Contents navigation items
+  let tocNavHtml = '';
+  outline.forEach((sec, idx) => {
+    const title = sec.title || `Section ${idx + 1}`;
+    tocNavHtml += `<a href="javascript:void(0)" onclick="scrollToTeacherSection('teacher-sec-${sec.id}', event)" class="teacher-toc-link ${idx === 0 ? 'active' : ''}" data-sec-id="teacher-sec-${sec.id}" title="${escapeHtml(title)}">${escapeHtml(title)}</a>`;
+  });
+
+  // Build Report Content HTML section by section
+  let contentHtml = '';
+
+  // 1. Overview Header (Title + Learning Objectives)
+  const topic = (reportData.brief && reportData.brief.topic) || reportData.raw_goal || 'Comprehensive Learning Guide';
+  const learnerLevel = (reportData.brief && reportData.brief.learner_level) || 'beginner';
+  
+  let overviewMd = `# ${topic}\n\nThis educational guide provides a structured breakdown of **${topic}** tailored for the **${learnerLevel}** level.\n\n### What You'll Learn\n\n`;
+  outline.forEach(sec => {
+    if (sec.learning_objective) {
+      overviewMd += `- **${sec.title}**: ${sec.learning_objective}\n`;
+    }
+  });
+  overviewMd += '\n---\n\n';
+
+  contentHtml += `<div class="teacher-report-overview">${parseReportMarkdown(overviewMd)}</div>`;
+
+  // 2. Sections
+  outline.forEach(sec => {
+    const secData = sectionsMap[sec.id] || {};
+    let secMd = secData.final_md || secData.draft_md || '';
+    
+    // Strip leading header if it duplicates title
+    secMd = secMd.trim().replace(new RegExp('^#+\\s*' + escapeRegExp(sec.title) + '\\s*\\n+', 'i'), '');
+    
+    // Demote any sub-H2s to H3
+    secMd = secMd.split('\n').map(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) {
+        return '#' + line;
+      }
+      return line;
+    }).join('\n');
+
+    contentHtml += `
+      <div id="teacher-sec-${sec.id}" class="teacher-sec-block" data-section-id="${sec.id}">
+        <div class="teacher-sec-header">
+          <h2>${escapeHtml(sec.title)}</h2>
+          <button class="btn-regen-section" onclick="regenerateTeacherSection('${runID}', '${sec.id}', this)" title="Regenerate this section">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            <span>Regenerate Section</span>
+          </button>
+        </div>
+        <div class="teacher-sec-body">
+          ${parseReportMarkdown(secMd)}
+        </div>
+      </div>
+      <hr class="teacher-sec-divider" />
+    `;
+  });
+
+  reportContainer.innerHTML = `
+    <div class="report-header">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">🎓</span>
+        <span>Comprehensive Learning Guide</span>
+      </div>
+      <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <button class="report-action-btn" onclick="copyReportMarkdown('${runID}')" title="Copy Markdown">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px; height:13px;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
+        <button class="report-action-btn" onclick="readReportAloud('${runID}')" title="Read Aloud">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px; height:13px;"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <button class="report-action-btn" onclick="downloadReportPDF('${runID}')" title="Export PDF">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px; height:13px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="teacher-report-layout">
+      <div class="teacher-report-main report-content" id="teacher-report-content-${runID}">
+        ${contentHtml}
+      </div>
+      ${tocNavHtml ? `
+        <div class="teacher-toc-sidebar">
+          <div class="teacher-toc-title">Table of Contents</div>
+          <div class="teacher-toc-nav">${tocNavHtml}</div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  thread.appendChild(reportContainer);
+  scrollToBottom();
+
+  // Post-process Markdown: replace Mermaid code blocks with rendered SVG
+  renderMermaidBlocks(reportContainer);
+
+  // Initialize ScrollSpy for active section highlighting
+  initTeacherScrollSpy(reportContainer);
+}
+
+function scrollToTeacherSection(secId, e) {
+  if (e) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+  const targetEl = document.getElementById(secId);
+  const scrollContainer = document.getElementById('thread-scroll');
+  if (targetEl && scrollContainer) {
+    const targetRect = targetEl.getBoundingClientRect();
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const targetScrollTop = scrollContainer.scrollTop + (targetRect.top - containerRect.top) - 20;
+    scrollContainer.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: 'smooth'
+    });
+
+    document.querySelectorAll('.teacher-toc-link').forEach(a => a.classList.remove('active'));
+    const activeLink = document.querySelector(`.teacher-toc-link[data-sec-id="${secId}"]`);
+    if (activeLink) activeLink.classList.add('active');
+  }
+}
+
+function initTeacherScrollSpy(container) {
+  const scrollContainer = document.getElementById('thread-scroll');
+  if (!scrollContainer) return;
+
+  const onScroll = () => {
+    const secBlocks = Array.from(container.querySelectorAll('.teacher-sec-block'));
+    if (!secBlocks || secBlocks.length === 0) return;
+
+    const containerRect = scrollContainer.getBoundingClientRect();
+    let activeSecId = null;
+
+    for (let i = 0; i < secBlocks.length; i++) {
+      const el = secBlocks[i];
+      const rect = el.getBoundingClientRect();
+      const relativeTop = rect.top - containerRect.top;
+
+      // Section reaches the upper reading line (130px from container top)
+      if (relativeTop <= 130) {
+        activeSecId = el.id;
+      } else {
+        break;
+      }
+    }
+
+    if (!activeSecId && secBlocks.length > 0) {
+      activeSecId = secBlocks[0].id;
+    }
+
+    if (activeSecId) {
+      document.querySelectorAll('.teacher-toc-link').forEach(a => {
+        if (a.getAttribute('data-sec-id') === activeSecId) {
+          a.classList.add('active');
+        } else {
+          a.classList.remove('active');
+        }
+      });
+    }
+  };
+
+  scrollContainer.removeEventListener('scroll', scrollContainer._teacherSpyHandler || (() => {}));
+  scrollContainer._teacherSpyHandler = onScroll;
+  scrollContainer.addEventListener('scroll', onScroll, { passive: true });
+  setTimeout(onScroll, 80);
+}
+
+/**
+ * Strip the auto-generated "Table of Contents" section from rendered markdown.
+ * The assembler embeds a ToC in the MD; we render our own sidebar one, so
+ * remove the inline version (h2/h1 "Table of Contents" + its following ol/ul).
+ */
+function stripInlineToc(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  // Find any heading whose text is exactly "Table of Contents" (case-insensitive)
+  const headings = tmp.querySelectorAll('h1, h2, h3');
+  headings.forEach(h => {
+    if (/^table of contents$/i.test(h.textContent.trim())) {
+      // Remove the heading and all immediately following sibling ol/ul nodes
+      let next = h.nextElementSibling;
+      while (next && (next.tagName === 'OL' || next.tagName === 'UL')) {
+        const toRemove = next;
+        next = next.nextElementSibling;
+        toRemove.remove();
+      }
+      // Also remove an optional <hr> that often follows ToC
+      if (next && next.tagName === 'HR') next.remove();
+      h.remove();
+    }
+  });
+  return tmp.innerHTML;
+}
+
+function renderMermaidBlocks(container) {
+  if (!container) return;
+  const preCodeBlocks = container.querySelectorAll('pre code.language-mermaid, pre code[class*="mermaid"]');
+  preCodeBlocks.forEach(codeEl => {
+    const pre = codeEl.closest('pre');
+    if (!pre) return;
+    const mermaidCode = codeEl.textContent;
+    const div = document.createElement('div');
+    div.className = 'mermaid';
+    div.textContent = mermaidCode;
+    pre.replaceWith(div);
+  });
+
+  if (typeof mermaid !== 'undefined') {
+    try {
+      mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+    } catch (e) {
+      console.warn("Mermaid render error:", e);
+    }
+  }
+}
+
+function attachSectionRegenButtons(container, runID, sections) {
+  if (!container || !sections || sections.length === 0) return;
+  const contentEl = container.querySelector('.teacher-report-main');
+  if (!contentEl) return;
+
+  const h2Headers = contentEl.querySelectorAll('h2');
+  h2Headers.forEach((h2, idx) => {
+    if (idx < sections.length) {
+      const sec = sections[idx];
+      const secID = sec.outline_id || sec.id;
+      h2.id = `teacher-sec-${secID}`;
+
+      const wrapper = document.createElement('div');
+      wrapper.className = 'teacher-sec-header';
+      h2.parentNode.insertBefore(wrapper, h2);
+      wrapper.appendChild(h2);
+
+      const btn = document.createElement('button');
+      btn.className = 'btn-regen-section';
+      btn.title = 'Regenerate this section with updated research and critique';
+      btn.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px; height:12px;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+        <span>Regenerate Section</span>
+      `;
+      btn.onclick = () => regenerateTeacherSection(runID, secID, btn);
+      wrapper.appendChild(btn);
+    }
+  });
+}
+
+async function regenerateTeacherSection(runID, secID, btn) {
+  if (!btn) return;
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span>Regenerating...</span>`;
+
+  try {
+    const res = await fetch(`/teacher/section/${secID}/regenerate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ run_id: runID, section_id: secID })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    // Reload and re-render full report
+    const repRes = await fetch(`/teacher/report/${runID}`);
+    if (repRes.ok) {
+      const reportData = await repRes.json();
+      renderTeacherReport(reportData);
+    }
+  } catch (err) {
+    console.error("Regeneration failed", err);
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    alert("Section regeneration failed: " + err.message);
+  }
+}
+
+function copyReportMarkdown(runID) {
+  const content = document.getElementById(`teacher-report-content-${runID}`);
+  if (!content) return;
+  navigator.clipboard.writeText(content.innerText || content.textContent)
+    .then(() => alert("Learning guide markdown copied to clipboard!"))
+    .catch(err => console.error("Copy failed", err));
+}
+
+function readReportAloud(runID) {
+  const content = document.getElementById(`teacher-report-content-${runID}`);
+  if (!content) return;
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(content.innerText || content.textContent);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
+  } else {
+    alert("Speech synthesis is not supported in this browser.");
+  }
+}
+
+function downloadReportPDF(runID) {
+  const content = document.getElementById(`teacher-report-content-${runID}`);
+  if (!content) return;
+  if (typeof html2pdf !== 'undefined') {
+    const opt = {
+      margin: 15,
+      filename: `learning-guide-${runID}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+    html2pdf().set(opt).from(content).save();
+  } else {
+    window.print();
+  }
 }
 </script>
 </body>

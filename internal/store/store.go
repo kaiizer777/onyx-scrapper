@@ -79,8 +79,8 @@ type Stats struct {
 }
 
 type RunHistoryItem struct {
-	ID        int64     `json:"id"`
-	Type      string    `json:"type"` // "agent" or "research"
+	ID        any       `json:"id"`
+	Type      string    `json:"type"` // "agent", "research", or "teacher"
 	Goal      string    `json:"goal"`
 	Status    string    `json:"status"`
 	StartedAt time.Time `json:"started_at"`
@@ -199,8 +199,24 @@ func NewStore(dbPath string) (*Store, error) {
 	db.Exec("CREATE TABLE IF NOT EXISTS profile_fields (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_id INTEGER NOT NULL, field_name TEXT NOT NULL, keywords_csv TEXT NOT NULL, priority_order INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL, FOREIGN KEY(profile_id) REFERENCES user_profiles(id) ON DELETE CASCADE, UNIQUE(profile_id, field_name));")
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_profile_fields_profile ON profile_fields(profile_id, priority_order ASC);")
 
+	// Teacher tables migration
+	db.Exec("CREATE TABLE IF NOT EXISTS teacher_runs (id TEXT PRIMARY KEY, raw_goal TEXT NOT NULL, status TEXT NOT NULL, learning_brief TEXT, report_md TEXT, error_message TEXT, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, completed_at DATETIME);")
+	db.Exec("CREATE TABLE IF NOT EXISTS teacher_clarifications (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE, round INTEGER NOT NULL, question TEXT NOT NULL, answer TEXT, created_at DATETIME NOT NULL);")
+	db.Exec("CREATE TABLE IF NOT EXISTS teacher_outline (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE, section_order INTEGER NOT NULL, title TEXT NOT NULL, learning_objective TEXT NOT NULL, depends_on TEXT, status TEXT NOT NULL);")
+	db.Exec("CREATE TABLE IF NOT EXISTS teacher_findings (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE, section_id TEXT NOT NULL REFERENCES teacher_outline(id) ON DELETE CASCADE, claim TEXT NOT NULL, source_url TEXT, source_provider TEXT, authority_tier TEXT, confidence REAL, created_at DATETIME NOT NULL);")
+	db.Exec("CREATE TABLE IF NOT EXISTS teacher_sections (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES teacher_runs(id) ON DELETE CASCADE, outline_id TEXT NOT NULL REFERENCES teacher_outline(id) ON DELETE CASCADE, draft_md TEXT, critique_notes TEXT, final_md TEXT, revision_count INTEGER NOT NULL DEFAULT 0, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL);")
+	db.Exec("CREATE VIRTUAL TABLE IF NOT EXISTS teacher_fts USING fts5(run_id, section_title, content);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_teacher_clarifications_run ON teacher_clarifications(run_id, round ASC);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_teacher_outline_run ON teacher_outline(run_id, section_order ASC);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_teacher_findings_run_sec ON teacher_findings(run_id, section_id);")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_teacher_sections_run ON teacher_sections(run_id, outline_id);")
 
 	return &Store{db: db}, nil
+}
+
+// DB returns the underlying sql.DB connection.
+func (s *Store) DB() *sql.DB {
+	return s.db
 }
 
 // Close closes the database connection.
@@ -740,6 +756,9 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 			UNION ALL
 			SELECT id, 'research' as type, goal, status, started_at
 			FROM research_runs
+			UNION ALL
+			SELECT id, 'teacher' as type, raw_goal as goal, status, created_at as started_at
+			FROM teacher_runs
 		)
 		ORDER BY started_at DESC
 		LIMIT ?;
@@ -753,8 +772,19 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 	var history []RunHistoryItem
 	for rows.Next() {
 		var item RunHistoryItem
-		if err := rows.Scan(&item.ID, &item.Type, &item.Goal, &item.Status, &item.StartedAt); err != nil {
+		var rawID any
+		if err := rows.Scan(&rawID, &item.Type, &item.Goal, &item.Status, &item.StartedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan run history item: %w", err)
+		}
+		switch v := rawID.(type) {
+		case []byte:
+			item.ID = string(v)
+		case string:
+			item.ID = v
+		case int64:
+			item.ID = v
+		default:
+			item.ID = fmt.Sprintf("%v", v)
 		}
 		history = append(history, item)
 	}

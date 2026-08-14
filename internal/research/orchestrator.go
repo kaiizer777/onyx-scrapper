@@ -96,7 +96,9 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 		if err != nil || run == nil {
 			return nil, fmt.Errorf("failed to resume run %d: %v", runID, err)
 		}
-		goal = run.Goal
+		if goal == "" {
+			goal = run.Goal
+		}
 		plan.Goal = goal
 		// Fallback outline if missing
 		plan.ReportOutline = []string{"Introduction", "Findings", "Conclusion"}
@@ -114,7 +116,9 @@ func (o *Orchestrator) Run(ctx context.Context, goal string, opts Options) (*sto
 		if err != nil {
 			return nil, fmt.Errorf("failed to create research run: %w", err)
 		}
+	}
 
+	if len(plan.SubQuestions) == 0 {
 		slog.Info("Planning research", "goal", goal)
 		plan, err = o.planner.Plan(ctx, goal)
 		if err != nil {

@@ -48,6 +48,26 @@ func TestRewriteStaleYearQuery(t *testing.T) {
 			query:    "current stock price of AAPL 2021",
 			expected: "current stock price of AAPL 2026",
 		},
+		{
+			name:     "Historical event with recency keyword should not rewrite",
+			query:    "recent developments in 2008 financial crisis literature",
+			expected: "recent developments in 2008 financial crisis literature",
+		},
+		{
+			name:     "Named pandemic event should not rewrite",
+			query:    "latest papers on the 2019 COVID-19 pandemic",
+			expected: "latest papers on the 2019 COVID-19 pandemic",
+		},
+		{
+			name:     "Historical election analysis should not rewrite",
+			query:    "latest analysis of the 2020 election results",
+			expected: "latest analysis of the 2020 election results",
+		},
+		{
+			name:     "Historical recession should not rewrite",
+			query:    "recent retrospective on the 2008 recession",
+			expected: "recent retrospective on the 2008 recession",
+		},
 	}
 
 	for _, tt := range tests {

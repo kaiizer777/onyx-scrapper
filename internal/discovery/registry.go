@@ -15,16 +15,21 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
+// Reranker defines the interface for reranking candidate documents.
+type Reranker interface {
+	Rerank(ctx context.Context, query string, docs []string) ([]RankedDoc, error)
+}
+
 // Registry manages discovery providers for searching and fetching.
 type Registry struct {
 	searchProviders []SearchProvider
 	fetchProviders  map[string]FetchProvider
 	fetchPriority   []string
-	reranker        *JinaReranker
+	reranker        Reranker
 }
 
 // NewRegistry creates a new registry.
-func NewRegistry(searchProviders []SearchProvider, fetchProviders map[string]FetchProvider, fetchPriority []string, reranker *JinaReranker) *Registry {
+func NewRegistry(searchProviders []SearchProvider, fetchProviders map[string]FetchProvider, fetchPriority []string, reranker Reranker) *Registry {
 	if len(fetchPriority) == 0 {
 		fetchPriority = []string{"colly", "rod", "tinyfish", "jina", "scraperapi"}
 	}
@@ -157,8 +162,10 @@ func (r *Registry) Rerank(ctx context.Context, query string, docs []string) ([]R
 }
 
 var (
-	fourDigitYearPattern  = regexp.MustCompile(`\b(20\d{2})\b`)
-	recencyKeywordPattern = regexp.MustCompile(`(?i)\b(latest|current|recent|newest|this year|now)\b`)
+	fourDigitYearPattern       = regexp.MustCompile(`\b(20\d{2})\b`)
+	recencyKeywordPattern      = regexp.MustCompile(`(?i)\b(latest|current|recent|newest|this year|now)\b`)
+	historicalEventNounPattern = regexp.MustCompile(`(?i)^\s*(financial\s+crisis|crisis|crash|recession|depression|pandemic|covid|covid-19|election|elections|olympics|bubble|war|wars|earthquake|tsunami|flood|treaty|accord|act|amendment|scandal|disaster|tragedy|incident|revolution|protest|protests|summit|attack|attacks)\b`)
+	historicalPrepPattern      = regexp.MustCompile(`(?i)\b(in\s+the|of\s+the|during(\s+the)?|since(\s+the)?|before(\s+the)?|after(\s+the)?|about\s+the|on\s+the|throughout\s+the)\s+$`)
 )
 
 func rewriteStaleYearQuery(query string) string {
@@ -168,15 +175,31 @@ func rewriteStaleYearQuery(query string) string {
 	currentYear := timecontext.Now().Year()
 	rewritten := query
 	changed := false
-	matches := fourDigitYearPattern.FindAllString(query, -1)
-	for _, match := range matches {
+
+	locs := fourDigitYearPattern.FindAllStringIndex(query, -1)
+	for i := len(locs) - 1; i >= 0; i-- {
+		loc := locs[i]
+		start, end := loc[0], loc[1]
+		match := query[start:end]
+
+		prefix := query[:start]
+		suffix := query[end:]
+
+		if historicalEventNounPattern.MatchString(suffix) {
+			continue
+		}
+		if historicalPrepPattern.MatchString(prefix) {
+			continue
+		}
+
 		if year, err := strconv.Atoi(match); err == nil {
 			if year < currentYear-1 {
-				rewritten = strings.Replace(rewritten, match, strconv.Itoa(currentYear), 1)
+				rewritten = rewritten[:start] + strconv.Itoa(currentYear) + rewritten[end:]
 				changed = true
 			}
 		}
 	}
+
 	if changed {
 		slog.Info("query_year_corrected", "original", query, "corrected", rewritten)
 	}

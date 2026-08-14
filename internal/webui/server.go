@@ -463,30 +463,54 @@ func (h *UIHandler) handleEnhancePrompt(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	cfg, _ := config.LoadConfig(ConfigPath)
-	groqKey := cfg.GetGroqAPIKey()
-	if groqKey == "" {
+	systemPrompt := `You are an expert prompt engineer. Your ONLY task is to take the user's input and REWRITE it into a clear, detailed, and highly effective prompt for an autonomous AI research/learning agent.
+
+CRITICAL RULES:
+1. DO NOT ANSWER the user's prompt or question. Even if the user asks a direct question (e.g., "what is X?"), your job is to rewrite the prompt (e.g., "Research and explain X in detail..."), NOT to provide the answer to X.
+2. Maintain the user's original intent, but flesh out explicit goals, actionable details, and scope.
+3. Return ONLY the final enhanced prompt text.
+4. Do not include any preambles, introductory commentary, markdown wrappers, or quote marks.`
+
+	var enhanced string
+	var err error
+
+	// 1. First try with active configured LLM client
+	if h.client != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		defer cancel()
+
+		enhanced, err = h.client.Chat(ctx, []llm.Message{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: rawPrompt},
+		})
+	}
+
+	// 2. Fallback to Groq if active client didn't succeed or wasn't configured
+	if err != nil || strings.TrimSpace(enhanced) == "" {
+		cfg, _ := config.LoadConfig(ConfigPath)
+		if cfg != nil {
+			groqKey := cfg.GetGroqAPIKey()
+			if groqKey != "" {
+				enhanced, err = llm.EnhancePromptWithGroq(r.Context(), groqKey, rawPrompt)
+			}
+		}
+	}
+
+	if err != nil || strings.TrimSpace(enhanced) == "" {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(enhancePromptResponse{
 			OriginalPrompt: rawPrompt,
 			EnhancedPrompt: rawPrompt,
 			Enhanced:       false,
-			Error:          "groq API key not set in config.yaml",
+			Error:          fmt.Sprintf("enhancement unavailable: %v", err),
 		})
 		return
 	}
 
-	enhanced, err := llm.EnhancePromptWithGroq(r.Context(), groqKey, rawPrompt)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(enhancePromptResponse{
-			OriginalPrompt: rawPrompt,
-			EnhancedPrompt: rawPrompt,
-			Enhanced:       false,
-			Error:          err.Error(),
-		})
-		return
-	}
+	enhanced = strings.TrimSpace(enhanced)
+	enhanced = strings.TrimPrefix(enhanced, "\"")
+	enhanced = strings.TrimSuffix(enhanced, "\"")
+	enhanced = strings.TrimSpace(enhanced)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(enhancePromptResponse{

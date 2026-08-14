@@ -13,7 +13,7 @@ data/
 *.dll
 *.so
 *.dylib
-onyx
+/onyx
 
 # Test binary built by `go test -c`
 *.test
