@@ -15,17 +15,17 @@
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   :root {
-    --bg-base: #06080f;
-    --bg-surface: #101420;
-    --bg-surface-hover: #171d2b;
-    --border-subtle: #1e2638;
-    --border-lighter: #2c3852;
+    --bg-base: #050608;
+    --bg-surface: #0b0d13;
+    --bg-surface-hover: #12151f;
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-lighter: rgba(255, 255, 255, 0.1);
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
-    --brand-primary: #0044ff;
-    --brand-primary-dark: #0022cc;
-    --brand-tint: rgba(0, 68, 255, 0.1);
-    --brand-gradient: linear-gradient(135deg, #0044ff 0%, #0011aa 100%);
+    --brand-primary: #3b82f6;
+    --brand-primary-dark: #1d4ed8;
+    --brand-tint: rgba(59, 130, 246, 0.12);
+    --brand-gradient: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
     --text-accent: #ffffff;
     
     --status-run: #fbbf24;
@@ -68,8 +68,8 @@
   /* ── Sidebar (3D Modern UI) ── */
   .sidebar {
     width: var(--sidebar-w);
-    background: linear-gradient(180deg, #0b0f19 0%, #060912 60%, #04050a 100%);
-    border-right: 1px solid rgba(255, 255, 255, 0.07);
+    background: linear-gradient(180deg, #080a0f 0%, #050608 60%, #020305 100%);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
     display: flex;
     flex-direction: column;
     z-index: 10;
@@ -157,7 +157,7 @@
   }
   .history-search-input {
     width: 100%;
-    background: rgba(9, 13, 22, 0.85);
+    background: rgba(7, 9, 13, 0.9);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 9px;
     padding: 7px 10px 7px 32px;
@@ -172,7 +172,7 @@
   .history-search-input:focus {
     border-color: rgba(99, 102, 241, 0.5);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(99, 102, 241, 0.25);
-    background: rgba(12, 17, 28, 0.95);
+    background: rgba(10, 13, 20, 0.95);
   }
 
   .history-list {
@@ -190,21 +190,21 @@
     padding: 12px 14px;
     border-radius: 12px;
     cursor: pointer;
-    background: linear-gradient(145deg, rgba(26, 34, 52, 0.6) 0%, rgba(15, 20, 32, 0.8) 100%);
+    background: linear-gradient(145deg, rgba(16, 20, 28, 0.7) 0%, rgba(9, 11, 17, 0.88) 100%);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-top: 1px solid rgba(255, 255, 255, 0.09);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
   .history-item:hover { 
     transform: translateY(-1.5px);
-    background: linear-gradient(145deg, rgba(32, 42, 64, 0.7) 0%, rgba(18, 24, 38, 0.9) 100%); 
+    background: linear-gradient(145deg, rgba(22, 28, 40, 0.8) 0%, rgba(12, 16, 24, 0.95) 100%); 
     border-color: rgba(99, 102, 241, 0.25);
     border-top-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
   .history-item.active {
-    background: linear-gradient(135deg, rgba(79, 70, 229, 0.18) 0%, rgba(30, 41, 59, 0.85) 100%);
+    background: linear-gradient(135deg, rgba(79, 70, 229, 0.16) 0%, rgba(16, 22, 33, 0.92) 100%);
     border-color: rgba(99, 102, 241, 0.5);
     border-top-color: rgba(165, 180, 252, 0.35);
     box-shadow: 0 6px 20px rgba(79, 70, 229, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -282,10 +282,11 @@
     display: flex;
     flex-direction: column;
     position: relative;
-    background: #06080f;
+    background: #040507;
     background-image: 
-      radial-gradient(circle at 50% -10%, rgba(99, 102, 241, 0.08) 0%, transparent 60%),
-      radial-gradient(circle at 100% 100%, rgba(79, 70, 229, 0.05) 0%, transparent 50%);
+      radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.035) 0%, transparent 60%),
+      radial-gradient(circle at 90% 100%, rgba(99, 102, 241, 0.025) 0%, transparent 50%),
+      radial-gradient(circle at 10% 35%, rgba(59, 130, 246, 0.02) 0%, transparent 45%);
   }
 
   /* Chat Thread */
@@ -391,11 +392,11 @@
 
   /* 3D Collapsible Step Block */
   .step-block {
-    background: linear-gradient(145deg, rgba(22, 29, 45, 0.8) 0%, rgba(13, 17, 28, 0.9) 100%);
+    background: linear-gradient(145deg, rgba(14, 18, 26, 0.85) 0%, rgba(8, 10, 15, 0.94) 100%);
     border-radius: 12px;
     margin-bottom: 12px;
     position: relative;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
@@ -515,10 +516,10 @@
   }
   
   .report-content {
-    background: linear-gradient(160deg, rgba(20, 26, 40, 0.9) 0%, rgba(10, 14, 23, 0.95) 100%);
+    background: linear-gradient(160deg, rgba(12, 15, 22, 0.94) 0%, rgba(6, 8, 12, 0.98) 100%);
     padding: 36px 40px;
     border-radius: 16px;
-    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.06);
     color: #f1f5f9;
     font-size: 14.5px;
     line-height: 1.7;
@@ -546,7 +547,7 @@
   .report-content a { color: inherit !important; text-decoration: none !important; pointer-events: none !important; cursor: text !important; }
   .report-content a:hover { text-decoration: none !important; text-shadow: none !important; }
   .report-content pre {
-    background: #070a10; 
+    background: #040508; 
     padding: 16px; 
     border-radius: 10px;
     overflow-x: auto; 
@@ -764,7 +765,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: linear-gradient(145deg, rgba(26, 35, 54, 0.6) 0%, rgba(15, 20, 32, 0.8) 100%);
+    background: linear-gradient(145deg, rgba(16, 20, 30, 0.65) 0%, rgba(8, 11, 16, 0.85) 100%);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
@@ -782,7 +783,7 @@
   /* ── 3D Bottom Floating Input Island ── */
   .input-area {
     padding: 20px 40px 28px 40px;
-    background: linear-gradient(to top, #06080f 70%, transparent);
+    background: linear-gradient(to top, #040507 70%, transparent);
     display: flex;
     justify-content: center;
     width: 100%;
@@ -792,13 +793,13 @@
   .input-container {
     width: 100%;
     max-width: 820px;
-    background: linear-gradient(160deg, rgba(20, 27, 42, 0.92) 0%, rgba(11, 15, 24, 0.96) 100%);
+    background: linear-gradient(160deg, rgba(13, 16, 24, 0.94) 0%, rgba(7, 9, 14, 0.97) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-top: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 18px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 45px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     position: relative;
     backdrop-filter: blur(16px);
     transition: border-color 0.25s ease, box-shadow 0.25s ease;
@@ -848,9 +849,9 @@
     position: absolute;
     bottom: 100%; left: 16px;
     margin-bottom: 10px;
-    background: linear-gradient(160deg, #161d2d 0%, #0d121f 100%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-top: 1px solid rgba(255, 255, 255, 0.18);
+    background: linear-gradient(160deg, #0f131c 0%, #07090e 100%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
     border-radius: 14px;
     padding: 8px;
     display: none;
@@ -1006,7 +1007,7 @@
   .sidebar-footer {
     padding: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    background: linear-gradient(180deg, rgba(11, 15, 25, 0.95) 0%, rgba(6, 9, 18, 0.98) 100%);
+    background: linear-gradient(180deg, rgba(8, 10, 15, 0.95) 0%, rgba(4, 5, 8, 0.98) 100%);
     backdrop-filter: blur(12px);
   }
   .btn-settings {
@@ -1014,7 +1015,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: linear-gradient(180deg, rgba(26, 35, 54, 0.7) 0%, rgba(16, 22, 35, 0.8) 100%);
+    background: linear-gradient(180deg, rgba(16, 21, 30, 0.75) 0%, rgba(9, 12, 18, 0.85) 100%);
     color: #e2e8f0;
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-top: 1px solid rgba(255, 255, 255, 0.12);
@@ -1045,8 +1046,8 @@
   .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(2, 4, 12, 0.7);
-    backdrop-filter: blur(6px);
+    background: rgba(1, 2, 4, 0.75);
+    backdrop-filter: blur(8px);
     display: none;
     align-items: center;
     justify-content: center;
@@ -1058,11 +1059,11 @@
   .modal {
     width: min(620px, calc(100vw - 32px));
     max-height: calc(100vh - 64px);
-    background: linear-gradient(160deg, var(--bg-surface) 0%, #0c111c 100%);
-    border: 1px solid var(--border-lighter);
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    background: linear-gradient(160deg, #0c0f16 0%, #05070c 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 16px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -1360,8 +1361,8 @@
   .field input[type="number"],
   .field select,
   .field textarea {
-    background: #090d16;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: #05070c;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--text-primary);
     border-radius: 10px;
     padding: 10px 14px;
@@ -1378,7 +1379,7 @@
   .field textarea:focus {
     border-color: #3b82f6;
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5), 0 0 0 3px rgba(59, 130, 246, 0.25);
-    background: #0c111d;
+    background: #080b12;
   }
   .setting-desc, .field-hint {
     font-size: 12px;
@@ -1516,12 +1517,12 @@
 
   /* ── Teacher Agent UI Styles (Phases 10) ── */
   .teacher-card {
-    background: linear-gradient(160deg, rgba(16, 22, 35, 0.95) 0%, rgba(10, 14, 23, 0.98) 100%);
-    border: 1px solid rgba(129, 140, 248, 0.25);
-    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    background: linear-gradient(160deg, rgba(11, 14, 22, 0.95) 0%, rgba(6, 8, 13, 0.98) 100%);
+    border: 1px solid rgba(129, 140, 248, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px;
     padding: 24px 28px;
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.08);
     width: 100%;
     animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -2357,7 +2358,7 @@
         </div>
       </div>
       <div class="input-row">
-        <textarea id="query-input" class="query-input" placeholder="Message Onyx..." rows="1" oninput="autoResize(this)"></textarea>
+        <textarea id="query-input" class="query-input" placeholder="Message Onyx... [BUILD: 2026-08-16 v2]" rows="1" oninput="autoResize(this)"></textarea>
         <button id="btn-send" class="btn-send" onclick="submitQuery()">
           <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
         </button>
@@ -2511,11 +2512,11 @@ function setMode(mode) {
   const input = document.getElementById('query-input');
   if (input) {
     if (isTeacher) {
-      input.placeholder = 'What do you want to learn? (e.g., Explain Transformer Self-Attention, How Paxos works, Causes of WWI...)';
+      input.placeholder = '[BUILD 0816] What do you want to learn? (e.g., Explain Transformer Self-Attention, How Paxos works, Causes of WWI...)';
     } else if (isResearch) {
-      input.placeholder = 'Research any topic, analyze web pages, or generate reports...';
+      input.placeholder = '[BUILD 0816] Research any topic, analyze web pages, or generate reports...';
     } else {
-      input.placeholder = 'Instruct Onyx Agent to perform a web task...';
+      input.placeholder = '[BUILD 0816] Instruct Onyx Agent to perform a web task...';
     }
   }
 
