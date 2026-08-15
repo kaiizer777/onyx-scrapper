@@ -2374,6 +2374,8 @@ let currentPoll = null;
 let currentRunId = null;
 let currentRunType = null;
 let selectedMode = 'research'; // 'research' or 'agent'
+let selectedTeacherMultiOptions = new Set();
+let teacherEventSource = null;
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -2812,6 +2814,28 @@ async function loadRun(type, id) {
       const userBubble = appendUserBubble(reportData.raw_goal || 'Teacher Run');
       userBubble.id = 'user-bubble-' + id;
 
+      // Rehydrate past clarification Q&A history if present
+      if (Array.isArray(reportData.clarifications) && reportData.clarifications.length > 0) {
+        reportData.clarifications.forEach((r, idx) => {
+          if (r.answer && r.answer.trim()) {
+            const histCard = document.createElement('div');
+            histCard.className = 'teacher-card';
+            histCard.innerHTML = `
+              <div class="teacher-header">
+                <div class="teacher-header-title">
+                  <span style="font-size:16px;">🎓</span>
+                  <span>Teacher Clarification</span>
+                </div>
+                <div class="teacher-round-badge">Round ${r.round || (idx + 1)}</div>
+              </div>
+              <div class="teacher-question-text">${escapeHtml(r.question?.text || '')}</div>
+            `;
+            thread.appendChild(histCard);
+            appendUserBubble(r.answer === '__start_now__' ? 'Start generating guide now' : r.answer);
+          }
+        });
+      }
+
       if (reportData.status === 'done' && reportData.report_md) {
         setStreamingState(false);
         renderTeacherReport(reportData);
@@ -2820,18 +2844,21 @@ async function loadRun(type, id) {
         renderTeacherBrief(reportData.brief);
       } else if (reportData.status === 'clarifying') {
         setStreamingState(false);
-        const ansRes = await fetch('/teacher/answer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ run_id: id, answer: "" })
-        });
-        if (ansRes.ok) {
-          const ansData = await ansRes.json();
-          handleTeacherResponse(ansData);
+        // Find the pending unanswered round if present
+        let pendingRound = null;
+        if (Array.isArray(reportData.clarifications)) {
+          pendingRound = reportData.clarifications.find(r => !r.answer || !r.answer.trim());
+        }
+        if (pendingRound) {
+          renderTeacherClarification({
+            run_id: id,
+            round: pendingRound.round,
+            question: pendingRound.question
+          });
         }
       } else {
         setStreamingState(true);
-        startTeacherStream(id);
+        startTeacherStream(id, reportData);
       }
     } catch (err) {
       console.error("Error loading teacher run", err);
@@ -4090,9 +4117,6 @@ function showTelegramStatus(msg, type) {
 // Teacher Agent Frontend Logic & Mermaid Integration (Phase 10)
 // ──────────────────────────────────────────────────────────────
 
-let teacherEventSource = null;
-let selectedTeacherMultiOptions = new Set();
-
 if (typeof mermaid !== 'undefined') {
   try {
     mermaid.initialize({
@@ -4152,23 +4176,6 @@ function renderTeacherClarification(data) {
 
   selectedTeacherMultiOptions.clear();
 
-  let optionsHtml = '';
-  if (hasOptions) {
-    optionsHtml = `<div class="teacher-chip-group" id="teacher-chips-${roundNum}">`;
-    q.options.forEach(opt => {
-      const escapedOpt = escapeHtml(opt);
-      if (isSingle) {
-        optionsHtml += `<div class="teacher-chip" onclick="selectTeacherSingleChip('${escapedOpt}')">${escapedOpt}</div>`;
-      } else if (isMulti) {
-        optionsHtml += `<div class="teacher-chip" onclick="toggleTeacherMultiChip(this, '${escapedOpt}')">
-          <span class="teacher-chip-checkbox">✓</span>
-          <span>${escapedOpt}</span>
-        </div>`;
-      }
-    });
-    optionsHtml += `</div>`;
-  }
-
   let actionHtml = '';
   if (isMulti) {
     actionHtml += `
@@ -4198,7 +4205,7 @@ function renderTeacherClarification(data) {
       <div class="teacher-round-badge">Round ${roundNum}</div>
     </div>
     <div class="teacher-question-text">${escapeHtml(q.text)}</div>
-    ${optionsHtml}
+    <div class="teacher-chip-group" id="teacher-chips-${roundNum}"></div>
     ${actionHtml}
     <div class="teacher-input-container">
       <input type="text" class="teacher-text-input" id="teacher-answer-input-${roundNum}" placeholder="Type your custom response or specify further..." onkeydown="if(event.key==='Enter') submitTeacherInputAnswer(${roundNum})" />
@@ -4209,6 +4216,25 @@ function renderTeacherClarification(data) {
     </div>
     ${overrideHtml}
   `;
+
+  if (hasOptions) {
+    const chipGroup = card.querySelector(`#teacher-chips-${roundNum}`);
+    if (chipGroup) {
+      q.options.forEach(opt => {
+        const chip = document.createElement('div');
+        chip.className = 'teacher-chip';
+        chip.dataset.optionValue = opt;
+        if (isSingle) {
+          chip.textContent = opt;
+          chip.addEventListener('click', () => selectTeacherSingleChip(opt));
+        } else if (isMulti) {
+          chip.innerHTML = `<span class="teacher-chip-checkbox">✓</span><span>${escapeHtml(opt)}</span>`;
+          chip.addEventListener('click', function() { toggleTeacherMultiChip(this, opt); });
+        }
+        chipGroup.appendChild(chip);
+      });
+    }
+  }
 
   thread.appendChild(card);
   scrollToBottom();
@@ -4438,7 +4464,7 @@ async function saveAndGenerateTeacherReport() {
   }
 }
 
-function startTeacherStream(runID) {
+function startTeacherStream(runID, initialReportData) {
   if (teacherEventSource) {
     teacherEventSource.close();
     teacherEventSource = null;
@@ -4483,6 +4509,56 @@ function startTeacherStream(runID) {
     const badge = document.getElementById(`gen-overall-badge-${runID}`);
     if (bar) bar.style.width = `${Math.max(5, percent)}%`;
     if (badge) badge.textContent = `${percent}% Complete`;
+  }
+
+  // Pre-populate existing outline and sections if hydrating on page reload
+  if (initialReportData && Array.isArray(initialReportData.outline) && initialReportData.outline.length > 0) {
+    const sections = initialReportData.outline;
+    totalSections = sections.length;
+    const existingSections = initialReportData.sections || [];
+    const secMap = new Map();
+    existingSections.forEach(s => {
+      secMap.set(s.outline_id, s);
+    });
+
+    const list = document.getElementById(`gen-sec-list-${runID}`);
+    if (list) {
+      list.innerHTML = '';
+      sections.forEach(sec => {
+        const existing = secMap.get(sec.id);
+        let secStatus = 'pending';
+        let badgeClass = 'pending';
+        let badgeText = '⏳ Pending';
+
+        if (existing) {
+          if (existing.final_md && existing.final_md.trim()) {
+            secStatus = 'done';
+            badgeClass = 'done';
+            badgeText = '✅ Done';
+          } else if (existing.draft_md && existing.draft_md.trim()) {
+            secStatus = 'drafted';
+            badgeClass = 'drafting';
+            badgeText = '✍️ Drafted';
+          }
+        }
+
+        sectionsState.set(sec.id, { title: sec.title, status: secStatus });
+        const item = document.createElement('div');
+        item.className = 'gen-sec-item' + (secStatus === 'done' ? ' done' : '');
+        item.id = `gen-sec-row-${sec.id}`;
+        item.innerHTML = `
+          <div class="gen-sec-info">
+            <div class="gen-sec-title">${escapeHtml(sec.title)}</div>
+            <div class="gen-sec-obj">${escapeHtml(sec.learning_objective || '')}</div>
+          </div>
+          <div class="gen-badge ${badgeClass}" id="gen-sec-badge-${sec.id}">${badgeText}</div>
+        `;
+        list.appendChild(item);
+      });
+    }
+    const ticker = document.getElementById(`gen-ticker-${runID}`);
+    if (ticker) ticker.textContent = `Outline loaded: ${totalSections} sequential sections. Streaming progress...`;
+    updateProgress();
   }
 
   teacherEventSource = new EventSource(`/teacher/stream/${runID}`);

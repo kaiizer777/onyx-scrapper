@@ -86,20 +86,17 @@ func (b *EventBroadcaster) Broadcast(event StreamEvent) {
 	}
 
 	b.mu.RLock()
+	defer b.mu.RUnlock()
+
 	subsMap, exists := b.subscribers[event.RunID]
 	if !exists || len(subsMap) == 0 {
-		b.mu.RUnlock()
 		return
 	}
 
-	// Copy subscriber channels to avoid holding lock during send
-	channels := make([]chan StreamEvent, 0, len(subsMap))
-	for _, ch := range subsMap {
-		channels = append(channels, ch)
-	}
-	b.mu.RUnlock()
-
-	for _, ch := range channels {
+	for subID, ch := range subsMap {
+		if b.closedSubs[subID] {
+			continue
+		}
 		select {
 		case ch <- event:
 		default:

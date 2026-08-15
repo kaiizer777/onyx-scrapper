@@ -62,6 +62,9 @@ func (o *Orchestrator) AssembleReport(ctx context.Context, runID string) (string
 		sectionMap[s.OutlineID] = s
 	}
 
+	// Clear existing FTS index entries for this run to avoid duplicates on re-assembly
+	_ = o.store.ClearReportFTS(runID)
+
 	topic := brief.Topic
 	if strings.TrimSpace(topic) == "" {
 		topic = run.RawGoal

@@ -29,16 +29,40 @@ type TeacherActionResponse struct {
 type AskLearnerArgs struct {
 	Question  string   `json:"question"`
 	Text      string   `json:"text,omitempty"`
+	Questions []string `json:"questions,omitempty"`
 	InputKind string   `json:"input_kind"` // single_select | multi_select | free_text
 	Options   []string `json:"options,omitempty"`
 }
 
-// GetQuestion returns the resolved question string.
+// SanitizeAtomicQuestion cleans up numbered prefixes and trims surrounding whitespace
+// to ensure a single clean atomic question is presented.
+func SanitizeAtomicQuestion(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	lower := strings.ToLower(trimmed)
+	for _, p := range []string{"question 1:", "question 1.", "q1:", "1.", "1)", "-"} {
+		if strings.HasPrefix(lower, p) {
+			trimmed = strings.TrimSpace(trimmed[len(p):])
+			break
+		}
+	}
+	return trimmed
+}
+
+// GetQuestion returns the resolved and sanitized question string.
 func (a *AskLearnerArgs) GetQuestion() string {
 	if strings.TrimSpace(a.Question) != "" {
-		return strings.TrimSpace(a.Question)
+		return SanitizeAtomicQuestion(a.Question)
 	}
-	return strings.TrimSpace(a.Text)
+	if strings.TrimSpace(a.Text) != "" {
+		return SanitizeAtomicQuestion(a.Text)
+	}
+	if len(a.Questions) > 0 && strings.TrimSpace(a.Questions[0]) != "" {
+		return SanitizeAtomicQuestion(a.Questions[0])
+	}
+	return ""
 }
 
 // FinalizeBriefArgs defines arguments for the finalize_brief tool.
@@ -85,7 +109,10 @@ Available actions and arguments:
 
 Rules:
 - Respond strictly with valid JSON. Do not output markdown fences if possible, or use standard raw JSON.
-- Ask ONE question per turn. Prefer tappable options (input_kind=single_select/multi_select) over free text whenever the space of sensible answers is small; use free_text for anything open-ended (the topic itself, specific things they already know, specific things to avoid assuming).
+- CRITICAL: Ask exactly ONE atomic, focused question per turn. Never bundle multiple questions, bullet points, or numbered lists into a single turn.
+- If multiple pieces of information are needed, choose the single most foundational question first.
+- Prefer tappable options (input_kind=single_select/multi_select) over free text whenever the space of sensible answers is small; use free_text for anything open-ended (the topic itself, specific things they already know, specific things to avoid assuming).
+- Always ensure the options provided in 'options' directly and unambiguously answer the single question asked.
 - Do not assume the subject is technical. Do not assume a skill level. Do not assume why they're learning this. If it's not stated or clearly implied, ask.
 - Stop asking once you could write a genuinely useful, non-generic learning brief — don't pad with low-value questions. You must ask at least {{min_rounds}} questions unless the learner has explicitly asked to start now.
 - On your last available round ({{max_rounds}}), you MUST call finalize_brief with your best effort, filling any unknown fields with clearly-labeled reasonable defaults (default depth: "{{default_depth}}").`

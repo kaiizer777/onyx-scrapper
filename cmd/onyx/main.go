@@ -1655,7 +1655,7 @@ func runTestTeacher(ctx context.Context, jsonOutput bool) {
 		os.Exit(1)
 	}
 
-	st, err := store.NewStore("onyx.db")
+	st, err := store.NewStore(defaultDBPath)
 	if err != nil {
 		slog.Error("Failed to initialize store", "error", err)
 		os.Exit(1)

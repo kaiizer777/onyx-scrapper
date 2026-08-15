@@ -198,6 +198,32 @@ func TestTeacherAPI_StartAndClarification(t *testing.T) {
 	if patchedPayload.Brief.Topic != "Transformer Attention (Deep Dive)" {
 		t.Errorf("expected patched topic, got %q", patchedPayload.Brief.Topic)
 	}
+
+	// 5. GET /teacher/report/{run_id} to verify clarifications payload
+	respReport, err := http.Get(fmt.Sprintf("%s/teacher/report/%s", ts.URL, runID))
+	if err != nil {
+		t.Fatalf("GET /teacher/report failed: %v", err)
+	}
+	defer respReport.Body.Close()
+
+	if respReport.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK on GET /teacher/report, got %d", respReport.StatusCode)
+	}
+
+	var repPayload struct {
+		RunID          string                      `json:"run_id"`
+		Status         string                      `json:"status"`
+		Clarifications []teacher.ClarificationRound `json:"clarifications"`
+	}
+	if err := json.NewDecoder(respReport.Body).Decode(&repPayload); err != nil {
+		t.Fatalf("failed to decode report payload: %v", err)
+	}
+	if len(repPayload.Clarifications) != 1 {
+		t.Fatalf("expected 1 clarification round in report payload, got %d", len(repPayload.Clarifications))
+	}
+	if repPayload.Clarifications[0].Answer != "Intermediate" {
+		t.Errorf("expected answer 'Intermediate', got %q", repPayload.Clarifications[0].Answer)
+	}
 }
 
 func TestTeacherAPI_GenerateAndSSEStream(t *testing.T) {

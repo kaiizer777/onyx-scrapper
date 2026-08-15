@@ -143,15 +143,12 @@ func (o *Orchestrator) DraftAllSections(ctx context.Context, runID string) ([]Te
 
 func cleanMarkdownContent(s string) string {
 	trimmed := strings.TrimSpace(s)
-	if strings.HasPrefix(trimmed, "```markdown") && strings.HasSuffix(trimmed, "```") {
-		trimmed = strings.TrimPrefix(trimmed, "```markdown")
-		trimmed = strings.TrimSuffix(trimmed, "```")
-		return strings.TrimSpace(trimmed)
-	}
-	if strings.HasPrefix(trimmed, "```md") && strings.HasSuffix(trimmed, "```") {
-		trimmed = strings.TrimPrefix(trimmed, "```md")
-		trimmed = strings.TrimSuffix(trimmed, "```")
-		return strings.TrimSpace(trimmed)
+	for _, prefix := range []string{"```markdown", "```md", "```JSON", "```json", "```"} {
+		if strings.HasPrefix(trimmed, prefix) && strings.HasSuffix(trimmed, "```") {
+			trimmed = strings.TrimPrefix(trimmed, prefix)
+			trimmed = strings.TrimSuffix(trimmed, "```")
+			return strings.TrimSpace(trimmed)
+		}
 	}
 	return trimmed
 }

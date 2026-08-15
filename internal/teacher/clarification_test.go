@@ -599,3 +599,124 @@ func TestClarificationFlow_InvalidBriefRejectionAndCorrection(t *testing.T) {
 		t.Errorf("expected domain 'Computer Science', got %q", res.Brief.Domain)
 	}
 }
+
+func TestClarificationFlow_IdempotentEmptyAnswer(t *testing.T) {
+	rootStore, teacherStore := setupTestTeacherStore(t)
+	defer rootStore.Close()
+
+	var llmCalls int32
+	server, client := newMockLLMServer(t, func(messages []llm.Message) (string, error) {
+		atomic.AddInt32(&llmCalls, 1)
+		return `{
+			"thought": "Asking first question.",
+			"action": {
+				"name": "ask_learner",
+				"args": {
+					"question": "What is your main programming language?",
+					"input_kind": "single_select",
+					"options": ["Go", "Rust", "Python"]
+				}
+			}
+		}`, nil
+	})
+	defer server.Close()
+
+	orch := NewOrchestratorWithStore(client, teacherStore, nil, nil)
+
+	run, err := teacherStore.CreateRun("Learn Concurrency Patterns")
+	if err != nil {
+		t.Fatalf("CreateRun failed: %v", err)
+	}
+
+	// Turn 1: Initial question generation
+	res1, err := orch.ClarificationTurn(context.Background(), run.ID, "")
+	if err != nil {
+		t.Fatalf("Turn 1 failed: %v", err)
+	}
+	if res1.Status != RunStatusClarifying || res1.Question.Text != "What is your main programming language?" {
+		t.Fatalf("unexpected res1: %+v", res1)
+	}
+	if atomic.LoadInt32(&llmCalls) != 1 {
+		t.Fatalf("expected 1 LLM call, got %d", atomic.LoadInt32(&llmCalls))
+	}
+
+	// Turn 2: Simulate browser refresh/re-query with empty answer ""
+	res2, err := orch.ClarificationTurn(context.Background(), run.ID, "")
+	if err != nil {
+		t.Fatalf("Turn 2 (idempotent reload) failed: %v", err)
+	}
+	if res2.Status != RunStatusClarifying || res2.Round != 1 || res2.Question.Text != "What is your main programming language?" {
+		t.Fatalf("unexpected res2: %+v", res2)
+	}
+	// Verify NO extra LLM call was made
+	if atomic.LoadInt32(&llmCalls) != 1 {
+		t.Fatalf("expected still 1 LLM call, got %d", atomic.LoadInt32(&llmCalls))
+	}
+
+	// Verify only 1 round exists in the DB
+	rounds, err := teacherStore.GetClarifications(run.ID)
+	if err != nil {
+		t.Fatalf("GetClarifications failed: %v", err)
+	}
+	if len(rounds) != 1 {
+		t.Fatalf("expected 1 round in store, got %d", len(rounds))
+	}
+}
+
+func TestClarificationFlow_ArrayQuestionsFallback(t *testing.T) {
+	rootStore, teacherStore := setupTestTeacherStore(t)
+	defer rootStore.Close()
+
+	server, client := newMockLLMServer(t, func(messages []llm.Message) (string, error) {
+		return `{
+			"thought": "Using questions array format.",
+			"action": {
+				"name": "ask_learner",
+				"args": {
+					"questions": ["What is your target timeline for learning this?"],
+					"input_kind": "single_select",
+					"options": ["1 week", "1 month"]
+				}
+			}
+		}`, nil
+	})
+	defer server.Close()
+
+	orch := NewOrchestratorWithStore(client, teacherStore, nil, nil)
+
+	run, err := teacherStore.CreateRun("Learn Distributed Systems")
+	if err != nil {
+		t.Fatalf("CreateRun failed: %v", err)
+	}
+
+	res, err := orch.ClarificationTurn(context.Background(), run.ID, "")
+	if err != nil {
+		t.Fatalf("ClarificationTurn with array questions failed: %v", err)
+	}
+	if res.Question.Text != "What is your target timeline for learning this?" {
+		t.Fatalf("expected question extracted from array, got %q", res.Question.Text)
+	}
+}
+
+func TestSanitizeAtomicQuestion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"1. What is your experience level?", "What is your experience level?"},
+		{"1) What is your experience level?", "What is your experience level?"},
+		{"Question 1: What is your experience level?", "What is your experience level?"},
+		{"Q1: What is your experience level?", "What is your experience level?"},
+		{"- What is your experience level?", "What is your experience level?"},
+		{"What is your experience level?", "What is your experience level?"},
+		{"", ""},
+	}
+
+	for _, tc := range tests {
+		got := SanitizeAtomicQuestion(tc.input)
+		if got != tc.expected {
+			t.Errorf("SanitizeAtomicQuestion(%q) = %q, expected %q", tc.input, got, tc.expected)
+		}
+	}
+}
+

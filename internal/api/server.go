@@ -1340,17 +1340,19 @@ func (s *Server) handleTeacherReport(w http.ResponseWriter, r *http.Request) {
 
 	outline, _ := s.teacherOrchestrator.Store().GetOutline(runID)
 	sections, _ := s.teacherOrchestrator.Store().GetSectionsForRun(runID)
+	clarifications, _ := s.teacherOrchestrator.Store().GetClarifications(runID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"run_id":       run.ID,
-		"raw_goal":     run.RawGoal,
-		"status":       run.Status,
-		"report_md":    run.ReportMD,
-		"brief":        run.LearningBrief,
-		"outline":      outline,
-		"sections":     sections,
-		"completed_at": run.CompletedAt,
-		"created_at":   run.CreatedAt,
+		"run_id":         run.ID,
+		"raw_goal":       run.RawGoal,
+		"status":         run.Status,
+		"report_md":      run.ReportMD,
+		"brief":          run.LearningBrief,
+		"outline":        outline,
+		"sections":       sections,
+		"clarifications": clarifications,
+		"completed_at":   run.CompletedAt,
+		"created_at":     run.CreatedAt,
 	})
 }
 

@@ -567,6 +567,9 @@ func (s *Store) SaveSectionDraft(sec *TeacherSection) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(id) DO UPDATE SET
 			draft_md = excluded.draft_md,
+			critique_notes = NULL,
+			final_md = '',
+			revision_count = 0,
 			updated_at = excluded.updated_at;
 	`
 	_, err := s.db.Exec(query, sec.ID, sec.RunID, sec.OutlineID, sec.DraftMD, sec.CritiqueNotesJSON(), sec.FinalMD, sec.RevisionCount, now, now)
@@ -668,6 +671,18 @@ func (s *Store) GetSectionsForRun(runID string) ([]TeacherSection, error) {
 	}
 
 	return sections, nil
+}
+
+// ClearReportFTS clears existing full-text search entries for a run to prevent duplicates on re-assembly.
+func (s *Store) ClearReportFTS(runID string) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	query := `DELETE FROM teacher_fts WHERE run_id = ?;`
+	if _, err := s.db.Exec(query, runID); err != nil {
+		return fmt.Errorf("failed to clear teacher FTS for run %s: %w", runID, err)
+	}
+	return nil
 }
 
 // IndexReportFTS indexes finished section content for full-text search.

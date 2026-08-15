@@ -23,7 +23,6 @@ type Orchestrator struct {
 	registry    *discoverypkg.Registry
 	cfg         *config.Config
 	authManager *quality.AuthorityManager
-	budget      *quality.Budget
 	broadcaster *EventBroadcaster
 }
 
@@ -38,12 +37,6 @@ func NewOrchestrator(client *llm.Client, appStore *store.Store, registry *discov
 
 // NewOrchestratorWithStore constructs an Orchestrator with an explicit Teacher Store.
 func NewOrchestratorWithStore(client *llm.Client, teacherStore *Store, registry *discoverypkg.Registry, cfg *config.Config) *Orchestrator {
-	maxExtraCalls := 40
-	if cfg != nil && cfg.Quality != nil && cfg.Quality.MaxExtraCallsPerRun > 0 {
-		maxExtraCalls = cfg.Quality.MaxExtraCallsPerRun
-	}
-	budget := quality.NewBudget(maxExtraCalls)
-
 	var authManager *quality.AuthorityManager
 	if cfg != nil && cfg.Quality != nil && (cfg.Quality.SourceAuthority.Enabled == nil || *cfg.Quality.SourceAuthority.Enabled) {
 		authManager = quality.NewAuthorityManager()
@@ -62,7 +55,6 @@ func NewOrchestratorWithStore(client *llm.Client, teacherStore *Store, registry 
 		registry:    registry,
 		cfg:         cfg,
 		authManager: authManager,
-		budget:      budget,
 		broadcaster: NewEventBroadcaster(),
 	}
 }
@@ -155,14 +147,24 @@ func (o *Orchestrator) ClarificationTurn(ctx context.Context, runID string, lear
 	cleanAnswer := strings.TrimSpace(learnerAnswer)
 	isManualOverride := cleanAnswer == ManualOverrideSentinel
 
-	// If there are existing rounds and learner answered, record the answer to the latest round.
-	if len(rounds) > 0 && cleanAnswer != "" {
+	// If there are existing rounds:
+	if len(rounds) > 0 {
 		lastIdx := len(rounds) - 1
-		if rounds[lastIdx].Answer == "" {
-			if err := o.store.UpdateClarificationAnswer(rounds[lastIdx].ID, cleanAnswer); err != nil {
-				return nil, fmt.Errorf("failed to update clarification answer: %w", err)
+		if cleanAnswer != "" {
+			if rounds[lastIdx].Answer == "" {
+				if err := o.store.UpdateClarificationAnswer(rounds[lastIdx].ID, cleanAnswer); err != nil {
+					return nil, fmt.Errorf("failed to update clarification answer: %w", err)
+				}
+				rounds[lastIdx].Answer = cleanAnswer
 			}
-			rounds[lastIdx].Answer = cleanAnswer
+		} else if rounds[lastIdx].Answer == "" {
+			// Idempotent: return the existing pending unanswered round without generating extra rounds or re-prompting LLM
+			return &ClarificationResult{
+				RunID:    runID,
+				Status:   RunStatusClarifying,
+				Round:    rounds[lastIdx].Round,
+				Question: &rounds[lastIdx].Question,
+			}, nil
 		}
 	}
 

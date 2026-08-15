@@ -203,3 +203,97 @@ func TestTeacherStoreEndToEnd(t *testing.T) {
 		t.Fatalf("unexpected list runs result: %+v", runs)
 	}
 }
+
+func TestTeacherStore_RegenerationResetAndClearFTS(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test_teacher_regen.db")
+
+	rootStore, err := store.NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to initialize root store: %v", err)
+	}
+	defer rootStore.Close()
+
+	ts := NewStoreFromAppStore(rootStore)
+
+	run, err := ts.CreateRun("Learn Distributed Consensus")
+	if err != nil {
+		t.Fatalf("CreateRun failed: %v", err)
+	}
+
+	outlineSec := TeacherOutlineSection{
+		ID:                "outline_0",
+		RunID:             run.ID,
+		SectionOrder:      0,
+		Title:             "Consensus Intro",
+		LearningObjective: "Intro to Paxos and Raft",
+		Status:            OutlineStatusPending,
+	}
+	if err := ts.SaveOutline([]TeacherOutlineSection{outlineSec}); err != nil {
+		t.Fatalf("SaveOutline failed: %v", err)
+	}
+
+	sec := &TeacherSection{
+		ID:        "sec_regen",
+		RunID:     run.ID,
+		OutlineID: "outline_0",
+		DraftMD:   "Draft 1",
+	}
+	if err := ts.SaveSectionDraft(sec); err != nil {
+		t.Fatalf("initial SaveSectionDraft failed: %v", err)
+	}
+
+	// Update critique to simulate revision 2
+	notes := []CritiqueNote{{Issue: "Needs work", Severity: "major"}}
+	if err := ts.UpdateSectionCritique(sec.ID, notes, "Final MD 1", 2); err != nil {
+		t.Fatalf("UpdateSectionCritique failed: %v", err)
+	}
+
+	loaded, _ := ts.GetSection(sec.ID)
+	if loaded.RevisionCount != 2 || loaded.FinalMD != "Final MD 1" {
+		t.Fatalf("expected revision_count=2, got %d", loaded.RevisionCount)
+	}
+
+	// Now simulate regeneration: SaveSectionDraft on the same ID
+	sec.DraftMD = "New regenerated draft 2"
+	sec.FinalMD = ""
+	sec.RevisionCount = 0
+	if err := ts.SaveSectionDraft(sec); err != nil {
+		t.Fatalf("regenerated SaveSectionDraft failed: %v", err)
+	}
+
+	regenLoaded, err := ts.GetSection(sec.ID)
+	if err != nil {
+		t.Fatalf("GetSection after regen failed: %v", err)
+	}
+	if regenLoaded.DraftMD != "New regenerated draft 2" {
+		t.Fatalf("expected updated draft_md, got %q", regenLoaded.DraftMD)
+	}
+	if regenLoaded.RevisionCount != 0 {
+		t.Fatalf("expected revision_count to be reset to 0, got %d", regenLoaded.RevisionCount)
+	}
+	if regenLoaded.FinalMD != "" {
+		t.Fatalf("expected final_md to be reset to empty, got %q", regenLoaded.FinalMD)
+	}
+	if len(regenLoaded.CritiqueNotes) != 0 {
+		t.Fatalf("expected critique_notes to be reset to nil, got %v", regenLoaded.CritiqueNotes)
+	}
+
+	// Test FTS indexing and ClearReportFTS
+	if err := ts.IndexReportFTS(run.ID, "Consensus Section", "Paxos and Raft consensus algorithms"); err != nil {
+		t.Fatalf("IndexReportFTS failed: %v", err)
+	}
+	res, _ := ts.SearchFTS("Paxos", 10)
+	if len(res) != 1 {
+		t.Fatalf("expected 1 FTS result, got %d", len(res))
+	}
+
+	if err := ts.ClearReportFTS(run.ID); err != nil {
+		t.Fatalf("ClearReportFTS failed: %v", err)
+	}
+
+	resAfterClear, _ := ts.SearchFTS("Paxos", 10)
+	if len(resAfterClear) != 0 {
+		t.Fatalf("expected 0 FTS results after ClearReportFTS, got %d", len(resAfterClear))
+	}
+}

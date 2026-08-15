@@ -56,12 +56,18 @@ func (o *Orchestrator) ResearchOutline(ctx context.Context, runID string) ([]Tea
 		}
 	}
 
+	maxExtraCalls := 40
+	if o.cfg != nil && o.cfg.Quality != nil && o.cfg.Quality.MaxExtraCallsPerRun > 0 {
+		maxExtraCalls = o.cfg.Quality.MaxExtraCallsPerRun
+	}
+	runBudget := quality.NewBudget(maxExtraCalls)
+
 	worker := &SectionResearchWorker{
 		client:      o.client,
 		store:       o.store,
 		registry:    o.registry,
 		authManager: o.authManager,
-		budget:      o.budget,
+		budget:      runBudget,
 		brief:       brief,
 	}
 

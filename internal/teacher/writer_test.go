@@ -204,3 +204,46 @@ func TestWriter_DraftAllSectionsConcurrency(t *testing.T) {
 		t.Errorf("expected run status %q, got %q", RunStatusWriting, updatedRun.Status)
 	}
 }
+
+func TestWriter_CleanMarkdownContent(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain triple backticks",
+			input:    "```\n# Header\nContent here\n```",
+			expected: "# Header\nContent here",
+		},
+		{
+			name:     "markdown code fences",
+			input:    "```markdown\n# Section Title\nDetailed notes.\n```",
+			expected: "# Section Title\nDetailed notes.",
+		},
+		{
+			name:     "md code fences",
+			input:    "```md\n# Fast Title\nSummary.\n```",
+			expected: "# Fast Title\nSummary.",
+		},
+		{
+			name:     "json code fences",
+			input:    "```json\n{\"key\": \"val\"}\n```",
+			expected: "{\"key\": \"val\"}",
+		},
+		{
+			name:     "no fences unmodified",
+			input:    "# Normal Header\nParagraph here",
+			expected: "# Normal Header\nParagraph here",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := cleanMarkdownContent(tc.input)
+			if got != tc.expected {
+				t.Errorf("expected %q, got %q", tc.expected, got)
+			}
+		})
+	}
+}
