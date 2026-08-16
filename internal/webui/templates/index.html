@@ -370,62 +370,96 @@
     animation: fadeIn 0.4s ease-out;
   }
 
+  @keyframes nodePulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(14, 165, 233, 0); }
+  }
+  @keyframes nodeAppear {
+    from { transform: scale(0); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
   .agent-blocks {
     display: flex;
     flex-direction: column;
     width: 100%;
     position: relative;
-    padding-left: 20px;
+    padding-left: 32px;
+    gap: 0;
   }
 
-  /* 3D Timeline Line */
-  .agent-blocks::before {
+  /* ── Step Node: connector + card wrapper ── */
+  .step-node {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Connector line drawn FROM this node DOWN to the next */
+  .step-node::after {
     content: '';
     position: absolute;
-    left: 9px;
-    top: 10px;
-    bottom: 10px;
+    left: -21px;
+    top: 38px;
+    bottom: -2px;
     width: 2px;
-    background: linear-gradient(to bottom, #0ea5e9 0%, rgba(14, 165, 233, 0.4) 40%, rgba(255, 255, 255, 0.06) 100%);
+    background: linear-gradient(to bottom, rgba(14, 165, 233, 0.6), rgba(14, 165, 233, 0.15));
     border-radius: 2px;
-    box-shadow: 0 0 8px rgba(14, 165, 233, 0.3);
+    z-index: 0;
+  }
+  /* Last node: no connector line below */
+  .step-node:last-child::after {
+    display: none;
   }
 
-  /* 3D Collapsible Step Block */
+  /* ── Node Dot ── */
+  .step-node::before {
+    content: '';
+    position: absolute;
+    left: -27px;
+    top: 16px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #1e3a5f 0%, #0f172a 70%);
+    border: 2.5px solid #0ea5e9;
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.5), 0 0 20px rgba(14, 165, 233, 0.15), inset 0 1px 3px rgba(0, 0, 0, 0.4);
+    z-index: 2;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: nodeAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  /* Expanded state: filled node with glow */
+  .step-node:has(.step-block.expanded)::before {
+    background: radial-gradient(circle at 40% 35%, #38bdf8, #0ea5e9);
+    border-color: #7dd3fc;
+    box-shadow: 0 0 12px rgba(14, 165, 233, 0.7), 0 0 28px rgba(14, 165, 233, 0.25), inset 0 1px 3px rgba(255, 255, 255, 0.2);
+  }
+  /* First node: special pulsing dot */
+  .step-node:first-child::before {
+    animation: nodeAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both, nodePulse 2.5s ease-in-out 0.5s infinite;
+    border-color: #38bdf8;
+  }
+
+  /* ── Step Card ── */
   .step-block {
-    background: linear-gradient(145deg, rgba(14, 18, 26, 0.85) 0%, rgba(8, 10, 15, 0.94) 100%);
-    border-radius: 14px;
-    margin-bottom: 10px;
+    background: linear-gradient(145deg, rgba(14, 18, 26, 0.9) 0%, rgba(8, 10, 15, 0.96) 100%);
+    border-radius: 12px;
+    margin-bottom: 8px;
     position: relative;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 2px solid rgba(14, 165, 233, 0.2);
     transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
-    overflow: hidden;
+    z-index: 1;
   }
   .step-block:hover {
-    transform: translateY(-1px);
-    border-color: rgba(14, 165, 233, 0.25);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transform: translateX(2px);
+    border-left-color: rgba(14, 165, 233, 0.5);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(14, 165, 233, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
-  
-  .step-block::before {
-    content: '';
-    position: absolute;
-    left: -15px;
-    top: 18px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #0f172a;
-    border: 2px solid #0ea5e9;
-    box-shadow: 0 0 10px rgba(14, 165, 233, 0.5), 0 0 20px rgba(14, 165, 233, 0.2);
-    z-index: 1;
-    transition: all 0.3s ease;
-  }
-  .step-block.expanded::before {
-    background: #0ea5e9;
-    box-shadow: 0 0 14px rgba(14, 165, 233, 0.8), 0 0 28px rgba(14, 165, 233, 0.3);
+  .step-block.expanded {
+    border-left-color: rgba(14, 165, 233, 0.6);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5), 0 0 30px rgba(14, 165, 233, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 
   .step-summary {
@@ -442,11 +476,11 @@
   }
 
   .step-number {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border-radius: 8px;
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(14, 165, 233, 0.08) 100%);
-    border: 1px solid rgba(14, 165, 233, 0.3);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(14, 165, 233, 0.06) 100%);
+    border: 1px solid rgba(14, 165, 233, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -456,17 +490,19 @@
     font-family: var(--font-mono);
     flex-shrink: 0;
     letter-spacing: -0.02em;
+    transition: all 0.3s ease;
   }
   .step-block.expanded .step-number {
-    background: linear-gradient(135deg, rgba(14, 165, 233, 0.3) 0%, rgba(14, 165, 233, 0.15) 100%);
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.25) 0%, rgba(14, 165, 233, 0.12) 100%);
     border-color: rgba(14, 165, 233, 0.5);
-    box-shadow: 0 0 10px rgba(14, 165, 233, 0.3);
+    box-shadow: 0 0 8px rgba(14, 165, 233, 0.2);
+    color: #7dd3fc;
   }
 
   .step-icon {
     width: 16px; height: 16px;
     display: flex; align-items: center; justify-content: center;
-    color: #64748b;
+    color: #475569;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), color 0.2s ease;
     font-size: 10px;
   }
@@ -475,49 +511,49 @@
   .step-title {
     font-size: 13.5px;
     font-weight: 500;
-    color: #f8fafc;
+    color: #e2e8f0;
     flex: 1;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
     letter-spacing: -0.01em;
+    line-height: 1.3;
   }
 
   .step-action-badge {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 600;
-    padding: 3px 9px;
-    border-radius: 8px;
+    padding: 3px 10px;
+    border-radius: 6px;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     flex-shrink: 0;
     font-family: var(--font-mono);
   }
   .step-action-badge.search {
-    background: rgba(56, 189, 248, 0.12);
+    background: rgba(56, 189, 248, 0.1);
     color: #7dd3fc;
-    border: 1px solid rgba(56, 189, 248, 0.25);
+    border: 1px solid rgba(56, 189, 248, 0.2);
   }
   .step-action-badge.navigate {
-    background: rgba(168, 85, 247, 0.12);
+    background: rgba(168, 85, 247, 0.1);
     color: #c084fc;
-    border: 1px solid rgba(168, 85, 247, 0.25);
+    border: 1px solid rgba(168, 85, 247, 0.2);
   }
   .step-action-badge.extract {
-    background: rgba(52, 211, 153, 0.12);
+    background: rgba(52, 211, 153, 0.1);
     color: #6ee7b7;
-    border: 1px solid rgba(52, 211, 153, 0.25);
+    border: 1px solid rgba(52, 211, 153, 0.2);
   }
   .step-action-badge.analyze {
-    background: rgba(251, 191, 36, 0.12);
+    background: rgba(251, 191, 36, 0.1);
     color: #fcd34d;
-    border: 1px solid rgba(251, 191, 36, 0.25);
+    border: 1px solid rgba(251, 191, 36, 0.2);
   }
   .step-action-badge.default {
-    background: rgba(148, 163, 184, 0.1);
+    background: rgba(148, 163, 184, 0.08);
     color: #94a3b8;
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    border: 1px solid rgba(148, 163, 184, 0.15);
   }
 
   .step-details-wrapper {
@@ -533,10 +569,13 @@
   }
 
   .step-details {
-    padding: 0 18px 18px 18px;
+    padding: 0 18px 16px 18px;
     font-size: 13px;
     color: #94a3b8;
     line-height: 1.6;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    margin-top: 2px;
+    padding-top: 14px;
   }
 
   @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
@@ -3040,7 +3079,8 @@ function renderThread(data) {
   
   const expandedStates = new Set();
   Array.from(blocksContainer.children).forEach((c, i) => {
-      if (c.classList.contains('expanded')) expandedStates.add(i);
+      const blk = c.querySelector ? c.querySelector('.step-block') : c;
+      if (blk && blk.classList.contains('expanded')) expandedStates.add(i);
   });
   
   blocksContainer.innerHTML = '';
@@ -3082,7 +3122,10 @@ function renderThread(data) {
           </div>
         </div>
       `;
-      blocksContainer.appendChild(block);
+      const node = document.createElement('div');
+      node.className = 'step-node';
+      node.appendChild(block);
+      blocksContainer.appendChild(node);
     });
     
     let loader = document.getElementById('loader-' + run.id);
@@ -3167,7 +3210,10 @@ function renderThread(data) {
           </div>
         </div>
       `;
-      blocksContainer.appendChild(block);
+      const node = document.createElement('div');
+      node.className = 'step-node';
+      node.appendChild(block);
+      blocksContainer.appendChild(node);
     });
     
     let loader = document.getElementById('loader-' + run.id);
