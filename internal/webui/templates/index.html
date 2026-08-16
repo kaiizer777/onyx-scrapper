@@ -20,14 +20,16 @@
     --bg-surface-hover: #12151f;
     --border-subtle: rgba(255, 255, 255, 0.06);
     --border-lighter: rgba(255, 255, 255, 0.1);
+    --border-glow: rgba(56, 189, 248, 0.4);
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-accent: #ffffff;
     --brand-primary: #38bdf8;
     --brand-primary-dark: #0284c7;
     --brand-tint: rgba(56, 189, 248, 0.15);
     --brand-gradient: linear-gradient(135deg, #38bdf8 0%, #0284c7 100%);
-    --text-accent: #ffffff;
-    
+
     --status-run: #fbbf24;
     --status-run-bg: rgba(251, 191, 36, 0.15);
     --status-done: #34d399;
@@ -37,9 +39,11 @@
 
     --shadow-sm: 0 2px 5px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.05);
     --shadow-md: 0 5px 15px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.05);
-    --shadow-3d: 0 4px 0 #005f73, 0 8px 15px rgba(0,0,0,0.5);
-    --shadow-3d-active: 0 0 0 #005f73, 0 2px 5px rgba(0,0,0,0.5);
-    
+
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Consolas, monospace;
     --sidebar-w: 290px;
@@ -131,6 +135,7 @@
     font-weight: 600;
     cursor: pointer;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
   .btn-new svg { width: 12px; height: 12px; stroke-width: 2.5; color: #38bdf8; }
   .btn-new:hover { background: linear-gradient(180deg, rgba(20, 28, 42, 0.95) 0%, rgba(12, 16, 26, 1) 100%); border-color: rgba(56, 189, 248, 0.4); }
@@ -171,8 +176,8 @@
   }
   .history-search-input::placeholder { color: #64748b; }
   .history-search-input:focus {
-    border-color: rgba(99, 102, 241, 0.5);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(99, 102, 241, 0.25);
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6), 0 0 0 2px rgba(56, 189, 248, 0.2);
     background: rgba(10, 13, 20, 0.95);
   }
 
@@ -687,6 +692,17 @@
     box-shadow: inset 0 0 12px rgba(239, 68, 68, 0.1);
   }
 
+  .status-message {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 12px;
+    border-radius: var(--radius-sm);
+    animation: fadeIn 0.3s ease-out;
+  }
+  .status-message.success { color: #34d399; }
+  .status-message.error { color: #f87171; }
+  .status-message.info { color: #38bdf8; }
+
   .loading-indicator {
     font-size: 13px; 
     font-weight: 500;
@@ -881,7 +897,13 @@
     color: #cbd5e1;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease;
+  }
+  .prompt-chip:hover {
+    background: linear-gradient(145deg, rgba(20, 26, 40, 0.75) 0%, rgba(12, 15, 22, 0.9) 100%);
+    border-color: rgba(56, 189, 248, 0.2);
+    color: #f1f5f9;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
   .prompt-chip:active {
     transform: translateY(1px);
@@ -1081,6 +1103,7 @@
     cursor: pointer;
     flex-shrink: 0;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
   }
   .btn-send:hover { background: linear-gradient(180deg, rgba(20, 28, 42, 0.9) 0%, rgba(12, 16, 26, 0.95) 100%); border-color: rgba(56, 189, 248, 0.3); box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 12px rgba(56,189,248,0.15); }
   .btn-send:active {
@@ -1104,6 +1127,11 @@
     cursor: pointer;
     flex-shrink: 0;
     box-shadow: 0 3px 0 #991b1b, 0 6px 14px rgba(239, 68, 68, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .btn-stop:hover {
+    background: rgba(239, 68, 68, 0.25);
+    box-shadow: 0 3px 0 #991b1b, 0 8px 18px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   }
   .btn-stop:active {
     transform: translateY(1px);
@@ -1134,6 +1162,12 @@
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
     font-family: var(--font-sans);
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  }
+  .btn-settings:hover {
+    background: linear-gradient(180deg, rgba(20, 28, 42, 0.85) 0%, rgba(12, 16, 26, 0.95) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
   .btn-settings:active {
     transform: translateY(1px);
@@ -1250,8 +1284,8 @@
   .field input:focus,
   .field select:focus,
   .field textarea:focus {
-    border-color: rgba(0, 68, 255, 0.6);
-    box-shadow: 0 0 0 3px rgba(0, 68, 255, 0.15);
+    border-color: rgba(56, 189, 248, 0.5);
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
   }
   .field input[disabled],
   .field select[disabled] { opacity: 0.5; cursor: not-allowed; }
@@ -1308,7 +1342,7 @@
   .model-item:hover { background: var(--bg-surface-hover); }
   .model-item.active {
     background: var(--brand-tint);
-    border: 1px solid rgba(0, 68, 255, 0.4);
+    border: 1px solid rgba(56, 189, 248, 0.4);
     color: var(--text-accent);
   }
   .model-item .model-tag {
