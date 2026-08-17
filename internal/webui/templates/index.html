@@ -2500,7 +2500,7 @@
         </div>
       </div>
       <div class="input-row">
-        <textarea id="query-input" class="query-input" placeholder="Message Onyx... [BUILD: 2026-08-16 v2]" rows="1" oninput="autoResize(this)"></textarea>
+        <textarea id="query-input" class="query-input" placeholder="ENTER THE TOPIC" rows="1" oninput="autoResize(this)"></textarea>
         <button id="btn-send" class="btn-send" onclick="submitQuery()">
           <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
         </button>
@@ -2654,11 +2654,11 @@ function setMode(mode) {
   const input = document.getElementById('query-input');
   if (input) {
     if (isTeacher) {
-      input.placeholder = '[BUILD 0816] What do you want to learn? (e.g., Explain Transformer Self-Attention, How Paxos works, Causes of WWI...)';
+      input.placeholder = 'ENTER THE TOPIC';
     } else if (isResearch) {
-      input.placeholder = '[BUILD 0816] Research any topic, analyze web pages, or generate reports...';
+      input.placeholder = 'ENTER THE TOPIC';
     } else {
-      input.placeholder = '[BUILD 0816] Instruct Onyx Agent to perform a web task...';
+      input.placeholder = 'ENTER THE TOPIC';
     }
   }
 

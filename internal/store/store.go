@@ -43,12 +43,13 @@ type SearchResult struct {
 }
 
 type AgentRun struct {
-	ID        int64     `json:"id"`
-	Goal      string    `json:"goal"`
-	Status    string    `json:"status"`
-	Result    string    `json:"result"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         int64     `json:"id"`
+	Goal       string    `json:"goal"`
+	Status     string    `json:"status"`
+	Result     string    `json:"result"`
+	IsGrounded bool      `json:"is_grounded"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 type AgentStep struct {
@@ -93,14 +94,26 @@ type ResearchSubQuestion struct {
 	Status   string `json:"status"` // pending, running, done, failed
 }
 
+type FindingStatus string
+
+const (
+	StatusActive       FindingStatus = "active"
+	StatusContradicted FindingStatus = "contradicted"
+	StatusUnclear      FindingStatus = "unclear"
+)
+
 type Finding struct {
-	ID            int64     `json:"id"`
-	SubQuestionID  int64     `json:"subquestion_id"`
-	Claim          string    `json:"claim"`
-	SourceURL      string    `json:"source_url"`
-	SourceProvider string    `json:"source_provider"`
-	Confidence     float64   `json:"confidence"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID               int64         `json:"id"`
+	SubQuestionID    int64         `json:"subquestion_id,omitempty"`
+	AgentRunID       int64         `json:"agent_run_id,omitempty"`
+	Claim            string        `json:"claim"`
+	SourceURL        string        `json:"source_url"`
+	SourceProvider   string        `json:"source_provider"`
+	Confidence       float64       `json:"confidence"`
+	Status           FindingStatus `json:"status"`
+	VerificationNote string        `json:"verification_note"`
+	AuthorityTier    int           `json:"authority_tier"`
+	CreatedAt        time.Time     `json:"created_at"`
 }
 
 // TelegramSession is the Phase-7 join row that links a Telegram chat to
@@ -183,8 +196,15 @@ func NewStore(dbPath string) (*Store, error) {
 
 	// Auto-migrate schema fixes
 	db.Exec("ALTER TABLE findings ADD COLUMN source_provider TEXT;")
+	db.Exec("ALTER TABLE findings ADD COLUMN status TEXT NOT NULL DEFAULT 'active';")
+	db.Exec("ALTER TABLE findings ADD COLUMN verification_note TEXT NOT NULL DEFAULT '';")
+	db.Exec("ALTER TABLE findings ADD COLUMN agent_run_id INTEGER;")
+	db.Exec("ALTER TABLE findings ADD COLUMN authority_tier INTEGER NOT NULL DEFAULT 0;")
+	db.Exec("ALTER TABLE agent_runs ADD COLUMN is_grounded INTEGER NOT NULL DEFAULT 0;")
 	db.Exec("ALTER TABLE pages ADD COLUMN source_provider TEXT;")
 	db.Exec("ALTER TABLE pages ADD COLUMN fetch_integrity TEXT NOT NULL DEFAULT 'ok';")
+	db.Exec("ALTER TABLE entity_cache ADD COLUMN entity_type TEXT NOT NULL DEFAULT '';")
+	db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_cache_typed ON entity_cache(entity, entity_type, version_token);")
 	db.Exec("CREATE TABLE IF NOT EXISTS run_pages (run_id INTEGER, url TEXT, FOREIGN KEY(run_id) REFERENCES research_runs(id) ON DELETE CASCADE, UNIQUE(run_id, url));")
 	// Phase 7: Telegram session linking. The schema.sql block already
 	// creates the table for fresh databases; this is the no-op upgrade
@@ -454,17 +474,19 @@ func (s *Store) SaveAgentStep(runID int64, stepNum int, action, argsJSON, result
 
 // GetAgentRun retrieves an agent run by ID.
 func (s *Store) GetAgentRun(runID int64) (*AgentRun, error) {
-	query := `SELECT id, goal, status, result, created_at, updated_at FROM agent_runs WHERE id = ?`
+	query := `SELECT id, goal, status, result, COALESCE(is_grounded, 0), created_at, updated_at FROM agent_runs WHERE id = ?`
 	row := s.db.QueryRow(query, runID)
 
 	var run AgentRun
-	err := row.Scan(&run.ID, &run.Goal, &run.Status, &run.Result, &run.CreatedAt, &run.UpdatedAt)
+	var isGroundedInt int
+	err := row.Scan(&run.ID, &run.Goal, &run.Status, &run.Result, &isGroundedInt, &run.CreatedAt, &run.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get agent run %d: %w", runID, err)
 	}
+	run.IsGrounded = isGroundedInt != 0
 	return &run, nil
 }
 
@@ -504,7 +526,7 @@ func (s *Store) GetAgentRuns(limit int) ([]AgentRun, error) {
 		limit = 50
 	}
 	query := `
-		SELECT id, goal, status, result, created_at, updated_at
+		SELECT id, goal, status, result, COALESCE(is_grounded, 0), created_at, updated_at
 		FROM agent_runs
 		ORDER BY id DESC
 		LIMIT ?;
@@ -518,9 +540,11 @@ func (s *Store) GetAgentRuns(limit int) ([]AgentRun, error) {
 	var runs []AgentRun
 	for rows.Next() {
 		var r AgentRun
-		if err := rows.Scan(&r.ID, &r.Goal, &r.Status, &r.Result, &r.CreatedAt, &r.UpdatedAt); err != nil {
+		var isGroundedInt int
+		if err := rows.Scan(&r.ID, &r.Goal, &r.Status, &r.Result, &isGroundedInt, &r.CreatedAt, &r.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan agent run: %w", err)
 		}
+		r.IsGrounded = isGroundedInt != 0
 		runs = append(runs, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -667,19 +691,48 @@ func (s *Store) GetSubQuestionsForRun(runID int64) ([]ResearchSubQuestion, error
 	return sqs, nil
 }
 
-func (s *Store) SaveFinding(sqID int64, claim, sourceURL, sourceProvider string, confidence float64) (int64, error) {
-	now := time.Now().UTC()
-	query := `INSERT INTO findings (subquestion_id, claim, source_url, source_provider, confidence, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id;`
+func (s *Store) InsertFinding(f Finding) (int64, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+
+	now := f.CreatedAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	status := f.Status
+	if status == "" {
+		status = StatusActive
+	}
+	var sqIDVal any = f.SubQuestionID
+	if f.SubQuestionID <= 0 {
+		sqIDVal = nil
+	}
+	var agentRunIDVal any = f.AgentRunID
+	if f.AgentRunID <= 0 {
+		agentRunIDVal = nil
+	}
+	query := `INSERT INTO findings (subquestion_id, agent_run_id, claim, source_url, source_provider, confidence, status, verification_note, authority_tier, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id;`
 	var fID int64
-	err := s.db.QueryRow(query, sqID, claim, sourceURL, sourceProvider, confidence, now).Scan(&fID)
+	err := s.db.QueryRow(query, sqIDVal, agentRunIDVal, f.Claim, f.SourceURL, f.SourceProvider, f.Confidence, string(status), f.VerificationNote, f.AuthorityTier, now).Scan(&fID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to save finding: %w", err)
+		return 0, fmt.Errorf("failed to insert finding: %w", err)
 	}
 	return fID, nil
 }
 
+func (s *Store) SaveFinding(sqID int64, claim, sourceURL, sourceProvider string, confidence float64) (int64, error) {
+	return s.InsertFinding(Finding{
+		SubQuestionID:  sqID,
+		Claim:          claim,
+		SourceURL:      sourceURL,
+		SourceProvider: sourceProvider,
+		Confidence:     confidence,
+		Status:         StatusActive,
+	})
+}
+
 func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
-	query := `SELECT id, subquestion_id, claim, source_url, source_provider, confidence, created_at FROM findings WHERE subquestion_id = ? ORDER BY id ASC`
+	query := `SELECT id, COALESCE(subquestion_id, 0), COALESCE(agent_run_id, 0), claim, source_url, COALESCE(source_provider, ''), confidence, COALESCE(status, 'active'), COALESCE(verification_note, ''), COALESCE(authority_tier, 0), created_at FROM findings WHERE subquestion_id = ? ORDER BY id ASC`
 	rows, err := s.db.Query(query, sqID)
 	if err != nil {
 		return nil, err
@@ -688,9 +741,16 @@ func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
 	var fs []Finding
 	for rows.Next() {
 		var f Finding
-		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &f.CreatedAt); err != nil {
+		var statusStr, noteStr string
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.AgentRunID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &statusStr, &noteStr, &f.AuthorityTier, &f.CreatedAt); err != nil {
 			return nil, err
 		}
+		if statusStr == "" {
+			f.Status = StatusActive
+		} else {
+			f.Status = FindingStatus(statusStr)
+		}
+		f.VerificationNote = noteStr
 		fs = append(fs, f)
 	}
 	return fs, nil
@@ -698,7 +758,7 @@ func (s *Store) GetFindingsForSubQuestion(sqID int64) ([]Finding, error) {
 
 func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
 	query := `
-		SELECT f.id, f.subquestion_id, f.claim, f.source_url, f.source_provider, f.confidence, f.created_at 
+		SELECT f.id, COALESCE(f.subquestion_id, 0), COALESCE(f.agent_run_id, 0), f.claim, f.source_url, COALESCE(f.source_provider, ''), f.confidence, COALESCE(f.status, 'active'), COALESCE(f.verification_note, ''), COALESCE(f.authority_tier, 0), f.created_at 
 		FROM findings f
 		JOIN research_subquestions sq ON f.subquestion_id = sq.id
 		WHERE sq.run_id = ?
@@ -712,12 +772,74 @@ func (s *Store) GetAllFindingsForRun(runID int64) ([]Finding, error) {
 	var fs []Finding
 	for rows.Next() {
 		var f Finding
-		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &f.CreatedAt); err != nil {
+		var statusStr, noteStr string
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.AgentRunID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &statusStr, &noteStr, &f.AuthorityTier, &f.CreatedAt); err != nil {
 			return nil, err
 		}
+		if statusStr == "" {
+			f.Status = StatusActive
+		} else {
+			f.Status = FindingStatus(statusStr)
+		}
+		f.VerificationNote = noteStr
 		fs = append(fs, f)
 	}
 	return fs, nil
+}
+
+// GetFindingsByAgentRun retrieves all findings recorded during an agent run.
+func (s *Store) GetFindingsByAgentRun(runID int64) ([]Finding, error) {
+	query := `
+		SELECT id, COALESCE(subquestion_id, 0), COALESCE(agent_run_id, 0), claim, source_url, COALESCE(source_provider, ''), confidence, COALESCE(status, 'active'), COALESCE(verification_note, ''), COALESCE(authority_tier, 0), created_at 
+		FROM findings 
+		WHERE agent_run_id = ? 
+		ORDER BY id ASC
+	`
+	rows, err := s.db.Query(query, runID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query findings for agent run %d: %w", runID, err)
+	}
+	defer rows.Close()
+	var fs []Finding
+	for rows.Next() {
+		var f Finding
+		var statusStr, noteStr string
+		if err := rows.Scan(&f.ID, &f.SubQuestionID, &f.AgentRunID, &f.Claim, &f.SourceURL, &f.SourceProvider, &f.Confidence, &statusStr, &noteStr, &f.AuthorityTier, &f.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan finding: %w", err)
+		}
+		if statusStr == "" {
+			f.Status = StatusActive
+		} else {
+			f.Status = FindingStatus(statusStr)
+		}
+		f.VerificationNote = noteStr
+		fs = append(fs, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating findings: %w", err)
+	}
+	return fs, nil
+}
+
+// MarkAgentRunGrounded marks the agent run as grounded and updates updated_at.
+func (s *Store) MarkAgentRunGrounded(runID int64) error {
+	now := time.Now().UTC()
+	query := `UPDATE agent_runs SET is_grounded = 1, updated_at = ? WHERE id = ?;`
+	_, err := s.db.Exec(query, now, runID)
+	if err != nil {
+		return fmt.Errorf("failed to mark agent run %d as grounded: %w", runID, err)
+	}
+	return nil
+}
+
+// UpdateFindingStatusAndNote updates the verification status and note for a finding.
+func (s *Store) UpdateFindingStatusAndNote(findingID int64, status FindingStatus, note string) error {
+	query := `UPDATE findings SET status = ?, verification_note = ? WHERE id = ?;`
+	_, err := s.db.Exec(query, string(status), note, findingID)
+	if err != nil {
+		return fmt.Errorf("failed to update finding %d status: %w", findingID, err)
+	}
+	return nil
 }
 
 // GetStats returns aggregated counts of the database records for the dashboard.
@@ -795,12 +917,12 @@ func (s *Store) GetMergedHistory(limit int) ([]RunHistoryItem, error) {
 }
 
 // GetEntityCache retrieves the verified result from cache if it's within TTL.
-func (s *Store) GetEntityCache(entity, token string, ttlHours int) (string, string, bool) {
+func (s *Store) GetEntityCache(entity, entityType, token string, ttlHours int) (string, string, bool) {
 	if ttlHours <= 0 {
 		ttlHours = 24
 	}
-	query := `SELECT result, value, created_at FROM entity_cache WHERE entity = ? AND version_token = ?`
-	row := s.db.QueryRow(query, entity, token)
+	query := `SELECT result, value, created_at FROM entity_cache WHERE entity = ? AND entity_type = ? AND version_token = ?`
+	row := s.db.QueryRow(query, entity, entityType, token)
 	var result, value string
 	var createdAt time.Time
 	if err := row.Scan(&result, &value, &createdAt); err != nil {
@@ -813,13 +935,13 @@ func (s *Store) GetEntityCache(entity, token string, ttlHours int) (string, stri
 }
 
 // SaveEntityCache saves the verified result to cache.
-func (s *Store) SaveEntityCache(entity, token, result, value string) error {
+func (s *Store) SaveEntityCache(entity, entityType, token, result, value string) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	now := time.Now().UTC()
-	query := `INSERT INTO entity_cache (entity, version_token, result, value, created_at) VALUES (?, ?, ?, ?, ?)
-		ON CONFLICT(entity, version_token) DO UPDATE SET result=excluded.result, value=excluded.value, created_at=excluded.created_at;`
-	_, err := s.db.Exec(query, entity, token, result, value, now)
+	query := `INSERT INTO entity_cache (entity, entity_type, version_token, result, value, created_at) VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT(entity, entity_type, version_token) DO UPDATE SET result=excluded.result, value=excluded.value, created_at=excluded.created_at;`
+	_, err := s.db.Exec(query, entity, entityType, token, result, value, now)
 	return err
 }
 

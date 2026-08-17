@@ -3,6 +3,8 @@ package quality
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"regexp"
 	"strings"
 	"time"
 
@@ -42,18 +44,33 @@ func NewSecondSourceVerifier(client *llm.Client, registry *discovery.Registry, s
 
 // VerifyClaim checks if a claim is freshness-sensitive. If so, it performs a second-source
 // lookup and uses the LLM to verify the claim against the new evidence.
-// It returns the VerificationResult and optionally the contradicted value.
 func (v *SecondSourceVerifier) VerifyClaim(ctx context.Context, claim string) (VerificationResult, string, error) {
-	if !v.detector.IsFreshnessSensitive(claim) {
+	detected := v.detector.Detect(claim)
+	if detected.Type == EntityUnknown {
 		// Not sensitive, skip check
 		return ResultUnclear, "", nil
 	}
+	return v.VerifyClaimWithEntity(ctx, claim, detected)
+}
 
-	entity := v.detector.ExtractEntity(claim)
-	versionToken := v.detector.ExtractVersionToken(claim)
+// VerifyClaimWithEntity performs verification using a pre-detected entity.
+func (v *SecondSourceVerifier) VerifyClaimWithEntity(ctx context.Context, claim string, detected DetectedEntity) (VerificationResult, string, error) {
+	if detected.Type == EntityUnknown {
+		return ResultUnclear, "", nil
+	}
+
+	entity := detected.Subject
+	if entity == "" {
+		entity = detected.RawMatch
+	}
+	if entity == "" {
+		entity = claim
+	}
+
+	cacheToken := CacheToken(detected, claim)
 
 	if v.store != nil {
-		if res, val, ok := v.store.GetEntityCache(entity, versionToken, v.ttlHours); ok {
+		if res, val, ok := v.store.GetEntityCache(entity, detected.Type.String(), cacheToken, v.ttlHours); ok {
 			return VerificationResult(res), val, nil
 		}
 	}
@@ -62,9 +79,9 @@ func (v *SecondSourceVerifier) VerifyClaim(ctx context.Context, claim string) (V
 		return ResultUnclear, "", nil
 	}
 
-	query := fmt.Sprintf("%s current latest version", entity)
+	query := BuildVerificationQuery(detected)
 
-	// Issue one extra search
+	// Issue search
 	results := v.registry.Search(ctx, query)
 	if len(results) == 0 {
 		return ResultUnclear, "", nil
@@ -116,32 +133,95 @@ VALUE: [the current value if contradicted, else blank]`, entity, claim, currentD
 		return ResultUnclear, "", err
 	}
 
-	res, val, err := parseVerificationResponse(respStr)
-	if err == nil && v.store != nil {
-		_ = v.store.SaveEntityCache(entity, versionToken, string(res), val)
+	res, val, ok := ParseVerificationResult(respStr)
+	if !ok {
+		rawPreview := respStr
+		if len(rawPreview) > 200 {
+			rawPreview = rawPreview[:200]
+		}
+		slog.Warn("verification result parse fallback", "raw", rawPreview)
 	}
-	return res, val, err
+
+	if v.store != nil {
+		_ = v.store.SaveEntityCache(entity, detected.Type.String(), cacheToken, string(res), val)
+	}
+	return res, val, nil
 }
 
-func parseVerificationResponse(resp string) (VerificationResult, string, error) {
-	lines := strings.Split(resp, "\n")
+var resultPattern = regexp.MustCompile(`(?i)result\s*:?\s*\**\[?\s*(CONFIRMED|CONTRADICTED|UNCLEAR)\s*\]?\**`)
+var valuePattern = regexp.MustCompile(`(?i)value\s*:?\s*\**\[?\s*(.*?)\s*\]?\**$`)
+
+// ParseVerificationResult parses the LLM response using robust regex matching with fallback line inspection.
+// Returns (result, value, ok) where ok is false if no recognizable result keyword was found.
+func ParseVerificationResult(raw string) (VerificationResult, string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ResultUnclear, "", false
+	}
+
+	lines := strings.Split(trimmed, "\n")
 	var result VerificationResult = ResultUnclear
 	var value string
+	foundResult := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "RESULT:") {
-			resStr := strings.TrimSpace(strings.TrimPrefix(line, "RESULT:"))
-			switch resStr {
-			case string(ResultConfirmed):
+		if m := resultPattern.FindStringSubmatch(line); m != nil {
+			switch strings.ToUpper(m[1]) {
+			case "CONFIRMED":
 				result = ResultConfirmed
-			case string(ResultContradicted):
+				foundResult = true
+			case "CONTRADICTED":
 				result = ResultContradicted
+				foundResult = true
+			case "UNCLEAR":
+				result = ResultUnclear
+				foundResult = true
 			}
-		} else if strings.HasPrefix(line, "VALUE:") {
-			value = strings.TrimSpace(strings.TrimPrefix(line, "VALUE:"))
+		}
+		if m := valuePattern.FindStringSubmatch(line); m != nil {
+			v := strings.TrimSpace(m[1])
+			if !strings.EqualFold(v, "the current value if contradicted, else blank") {
+				value = v
+			}
 		}
 	}
 
-	return result, value, nil
+	if foundResult {
+		return result, value, true
+	}
+
+	// Fallback 1: Check entire string against result pattern
+	if m := resultPattern.FindStringSubmatch(raw); m != nil {
+		switch strings.ToUpper(m[1]) {
+		case "CONFIRMED":
+			return ResultConfirmed, value, true
+		case "CONTRADICTED":
+			return ResultContradicted, value, true
+		case "UNCLEAR":
+			return ResultUnclear, value, true
+		}
+	}
+
+	// Fallback 2: Check all lines for bare keywords
+	for _, line := range lines {
+		lineUpper := strings.ToUpper(strings.TrimSpace(line))
+		if lineUpper == "" {
+			continue
+		}
+		for _, kw := range []string{"CONFIRMED", "CONTRADICTED", "UNCLEAR"} {
+			if strings.Contains(lineUpper, kw) {
+				switch kw {
+				case "CONFIRMED":
+					return ResultConfirmed, value, true
+				case "CONTRADICTED":
+					return ResultContradicted, value, true
+				case "UNCLEAR":
+					return ResultUnclear, value, true
+				}
+			}
+		}
+	}
+
+	return ResultUnclear, "", false
 }

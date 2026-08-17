@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,28 +17,41 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/go-rod/stealth"
 	browserpkg "github.com/kaiizer777/onyx-scrapper/internal/browser"
+	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
 	"github.com/kaiizer777/onyx-scrapper/internal/extract"
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
+	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	stealthpkg "github.com/kaiizer777/onyx-scrapper/internal/stealth"
 	"github.com/kaiizer777/onyx-scrapper/internal/store"
-	discoverypkg "github.com/kaiizer777/onyx-scrapper/internal/discovery"
-	"github.com/kaiizer777/onyx-scrapper/internal/quality"
 	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
 const (
-	DefaultMaxSteps = 40 // hard cap: catches infinite loops, rarely hit in practice
-	MaxSnippetLen   = 3000
+	DefaultMaxSteps      = 40 // hard cap: catches infinite loops, rarely hit in practice
+	MaxSnippetLen        = 3000
+	DefaultMinConfidence = 0.4
+)
+
+var (
+	ErrUngroundedFinding    = errors.New("finding dropped: claimed URL not found in navigation history")
+	ErrLowConfidenceFinding = errors.New("finding dropped: confidence below minimum threshold")
 )
 
 // Agent represents a ReAct agent runner.
 type Agent struct {
-	client        *llm.Client
-	store         *store.Store
-	registry      *discoverypkg.Registry
-	maxSteps      int
-	subQuestionID int64
-	newsContext   string // optional: injected when the goal is news-related
+	client               *llm.Client
+	store                *store.Store
+	registry             *discoverypkg.Registry
+	maxSteps             int
+	subQuestionID        int64
+	newsContext          string // optional: injected when the goal is news-related
+	minConfidence        float64
+	entityDetector       *quality.EntityDetector
+	secondSourceVerifier *quality.SecondSourceVerifier
+	authorityManager     *quality.AuthorityManager
+	corroborationEngine  *quality.CorroborationEngine
+	budget               *quality.Budget
+	visitedURLs          []string
 }
 
 // Option configures Agent parameters.
@@ -75,18 +89,262 @@ func WithNewsContext(ctx string) Option {
 	}
 }
 
+// WithMinConfidence sets the minimum confidence threshold for record_finding.
+func WithMinConfidence(min float64) Option {
+	return func(a *Agent) {
+		if min > 0 {
+			a.minConfidence = min
+		}
+	}
+}
+
+// WithEntityDetector configures custom EntityDetector.
+func WithEntityDetector(d *quality.EntityDetector) Option {
+	return func(a *Agent) {
+		a.entityDetector = d
+	}
+}
+
+// WithSecondSourceVerifier configures custom SecondSourceVerifier.
+func WithSecondSourceVerifier(v *quality.SecondSourceVerifier) Option {
+	return func(a *Agent) {
+		a.secondSourceVerifier = v
+	}
+}
+
+// WithAuthorityManager configures custom AuthorityManager.
+func WithAuthorityManager(am *quality.AuthorityManager) Option {
+	return func(a *Agent) {
+		a.authorityManager = am
+	}
+}
+
+// WithCorroborationEngine configures custom CorroborationEngine.
+func WithCorroborationEngine(ce *quality.CorroborationEngine) Option {
+	return func(a *Agent) {
+		a.corroborationEngine = ce
+	}
+}
+
+// WithBudget configures custom Budget governor.
+func WithBudget(b *quality.Budget) Option {
+	return func(a *Agent) {
+		a.budget = b
+	}
+}
+
 // NewAgent creates a new agent instance.
 func NewAgent(client *llm.Client, st *store.Store, opts ...Option) *Agent {
 	a := &Agent{
-		client:   client,
-		store:    st,
-		maxSteps: DefaultMaxSteps,
+		client:        client,
+		store:         st,
+		maxSteps:      DefaultMaxSteps,
+		minConfidence: DefaultMinConfidence,
 	}
 	for _, opt := range opts {
 		opt(a)
 	}
-	// We no longer instantiate a default search service here; the caller must provide a Registry.
+	if a.entityDetector == nil {
+		a.entityDetector = quality.NewEntityDetector()
+	}
+	if a.authorityManager == nil {
+		a.authorityManager = quality.NewAuthorityManager()
+	}
+	if a.corroborationEngine == nil {
+		a.corroborationEngine = quality.NewCorroborationEngine(a.authorityManager)
+	}
+	if a.secondSourceVerifier == nil && a.client != nil && a.registry != nil {
+		a.secondSourceVerifier = quality.NewSecondSourceVerifier(a.client, a.registry, a.store, a.budget, 24)
+	}
 	return a
+}
+
+// AddVisitedURL records a URL into the agent's navigation history.
+func (a *Agent) AddVisitedURL(u string) {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return
+	}
+	for _, v := range a.visitedURLs {
+		if v == u {
+			return
+		}
+	}
+	a.visitedURLs = append(a.visitedURLs, u)
+}
+
+// VisitedURLs returns the navigation history.
+func (a *Agent) VisitedURLs() []string {
+	return a.visitedURLs
+}
+
+// groundFindingURL checks that claimedURL matches a visited URL or defaults to current page.
+func (a *Agent) groundFindingURL(currentURL, claimedURL string) (string, bool) {
+	claimedURL = strings.TrimSpace(claimedURL)
+	if claimedURL == "" {
+		if currentURL != "" {
+			return currentURL, true
+		}
+		if len(a.visitedURLs) > 0 {
+			return a.visitedURLs[len(a.visitedURLs)-1], true
+		}
+		return "", false
+	}
+
+	if currentURL != "" && urlsRoughlyMatch(claimedURL, currentURL) {
+		return currentURL, true
+	}
+
+	for _, visited := range a.visitedURLs {
+		if urlsRoughlyMatch(claimedURL, visited) {
+			return visited, true
+		}
+	}
+
+	return "", false
+}
+
+// urlsRoughlyMatch checks whether two URLs have the same host and path (ignoring www. and trailing slashes).
+func urlsRoughlyMatch(u1, u2 string) bool {
+	p1, err1 := url.Parse(strings.TrimSpace(u1))
+	p2, err2 := url.Parse(strings.TrimSpace(u2))
+	if err1 != nil || err2 != nil {
+		return strings.EqualFold(strings.TrimRight(u1, "/"), strings.TrimRight(u2, "/"))
+	}
+	h1 := strings.TrimPrefix(strings.ToLower(p1.Hostname()), "www.")
+	h2 := strings.TrimPrefix(strings.ToLower(p2.Hostname()), "www.")
+	if h1 != h2 {
+		return false
+	}
+	path1 := strings.TrimRight(p1.Path, "/")
+	path2 := strings.TrimRight(p2.Path, "/")
+	return strings.EqualFold(path1, path2)
+}
+
+func (a *Agent) handleRecordFinding(ctx context.Context, runID int64, args RecordFindingArgs, currentURL string) (string, error) {
+	if a.store == nil {
+		return "", fmt.Errorf("store not configured")
+	}
+
+	verifiedURL, ok := a.groundFindingURL(currentURL, args.SourceURL)
+	if !ok {
+		slog.Warn("record_finding: claimed URL not in navigation history, dropping", "claimed_url", args.SourceURL, "current_url", currentURL)
+		return "", fmt.Errorf("%w: claimed URL %q not in navigation history", ErrUngroundedFinding, args.SourceURL)
+	}
+
+	minConf := a.minConfidence
+	if minConf <= 0 {
+		minConf = DefaultMinConfidence
+	}
+	if args.Confidence < minConf {
+		slog.Debug("record_finding: below confidence threshold, dropping", "confidence", args.Confidence, "min_confidence", minConf)
+		return "", fmt.Errorf("%w: confidence %.2f is below threshold %.2f", ErrLowConfidenceFinding, args.Confidence, minConf)
+	}
+
+	if a.entityDetector == nil {
+		a.entityDetector = quality.NewEntityDetector()
+	}
+	detected := a.entityDetector.Detect(args.Claim)
+
+	finding := store.Finding{
+		SubQuestionID:  a.subQuestionID,
+		AgentRunID:     runID,
+		Claim:          args.Claim,
+		SourceURL:      verifiedURL,
+		SourceProvider: "agent",
+		Confidence:     args.Confidence,
+		Status:         store.StatusActive,
+	}
+
+	if a.authorityManager != nil {
+		tier := a.authorityManager.GetAuthorityTier(verifiedURL)
+		finding.AuthorityTier = int(tier)
+	}
+
+	if detected.Type != quality.EntityUnknown {
+		if a.secondSourceVerifier == nil && a.client != nil && a.registry != nil {
+			a.secondSourceVerifier = quality.NewSecondSourceVerifier(a.client, a.registry, a.store, a.budget, 24)
+		}
+		if a.secondSourceVerifier != nil {
+			res, val, err := a.secondSourceVerifier.VerifyClaimWithEntity(ctx, args.Claim, detected)
+			if err != nil {
+				slog.Warn("Second source verification failed", "error", err)
+			} else {
+				switch res {
+				case quality.ResultContradicted:
+					finding.Status = store.StatusContradicted
+					finding.VerificationNote = val
+				case quality.ResultUnclear:
+					finding.Status = store.StatusUnclear
+					finding.VerificationNote = val
+				case quality.ResultConfirmed:
+					finding.Status = store.StatusActive
+					finding.VerificationNote = val
+				default:
+					finding.Status = store.StatusActive
+				}
+			}
+		}
+	}
+
+	findingID, err := a.store.InsertFinding(finding)
+	if err != nil {
+		return "", fmt.Errorf("failed to save finding: %w", err)
+	}
+
+	return fmt.Sprintf("Successfully recorded finding (id=%d, status=%s, authority_tier=%d): %q", findingID, finding.Status, finding.AuthorityTier, args.Claim), nil
+}
+
+// PostRunGroundingPass executes post-run fact verification and grounding for standalone runs.
+func (a *Agent) PostRunGroundingPass(ctx context.Context, runID int64) error {
+	if a.store == nil {
+		return nil
+	}
+
+	findings, err := a.store.GetFindingsByAgentRun(runID)
+	if err != nil {
+		return fmt.Errorf("failed to get findings for agent run %d: %w", runID, err)
+	}
+
+	if a.entityDetector == nil {
+		a.entityDetector = quality.NewEntityDetector()
+	}
+	if a.authorityManager == nil {
+		a.authorityManager = quality.NewAuthorityManager()
+	}
+	if a.corroborationEngine == nil {
+		a.corroborationEngine = quality.NewCorroborationEngine(a.authorityManager)
+	}
+	if a.secondSourceVerifier == nil && a.client != nil && a.registry != nil {
+		a.secondSourceVerifier = quality.NewSecondSourceVerifier(a.client, a.registry, a.store, a.budget, 24)
+	}
+
+	for _, f := range findings {
+		detected := a.entityDetector.Detect(f.Claim)
+		if detected.Type != quality.EntityUnknown && f.VerificationNote == "" {
+			if a.secondSourceVerifier != nil {
+				res, val, err := a.secondSourceVerifier.VerifyClaimWithEntity(ctx, f.Claim, detected)
+				if err == nil {
+					newStatus := f.Status
+					switch res {
+					case quality.ResultContradicted:
+						newStatus = store.StatusContradicted
+					case quality.ResultUnclear:
+						newStatus = store.StatusUnclear
+					case quality.ResultConfirmed:
+						newStatus = store.StatusActive
+					}
+					_ = a.store.UpdateFindingStatusAndNote(f.ID, newStatus, val)
+				}
+			}
+		}
+	}
+
+	if len(findings) > 0 && a.corroborationEngine != nil {
+		_ = a.corroborationEngine.GroupAndLabelFindings(findings)
+	}
+
+	return a.store.MarkAgentRunGrounded(runID)
 }
 
 // ActionResponse defines the JSON structure expected from LLM.
@@ -193,11 +451,7 @@ You must reason step-by-step and respond ONLY with a single JSON object matching
 {
   "thought": "Explanation of your plan and reasoning for this step",
   "action": {
-    "name": "web_search|navigate|find_element|click|type|extract|done`
-	if a.subQuestionID > 0 {
-		systemPrompt += `|record_finding`
-	}
-	systemPrompt += `",
+    "name": "web_search|navigate|find_element|click|type|extract|record_finding|done",
     "args": { ... }
   }
 }
@@ -209,12 +463,8 @@ Available actions and arguments:
 4. click: {"selector": "#id or .class", "description": "optional description if selector unknown"} - Clicks element.
 5. type: {"selector": "#id or .class", "description": "optional description", "text": "text to type", "press_enter": true|false} - Inputs text into field.
 6. extract: {"schema": "product|article|event|search-result-list or custom JSON schema"} - Extracts structured JSON from page.
-7. done: {"result": "The FULL comprehensive final report. CRITICAL: You MUST write the complete, detailed markdown report inside this field. Do NOT just output a confirmation like 'I have gathered insights' or 'The final report is ready'. Include all actual data, facts, and extracted JSON here."} - Completes execution.`
-	
-	if a.subQuestionID > 0 {
-		systemPrompt += `
-8. record_finding: {"claim": "clear factual statement", "source_url": "URL where claim is found", "confidence": 0.0-1.0} - Immediately saves a finding to the database without stopping the agent.`
-	}
+7. record_finding: {"claim": "clear factual statement", "source_url": "URL where claim is found", "confidence": 0.0-1.0} - Immediately saves a finding to the database without stopping the agent.
+8. done: {"result": "The FULL comprehensive final report. CRITICAL: You MUST write the complete, detailed markdown report inside this field. Do NOT just output a confirmation like 'I have gathered insights' or 'The final report is ready'. Include all actual data, facts, and extracted JSON here."} - Completes execution.`
 
 	if a.newsContext != "" {
 		systemPrompt += "\n\n" + a.newsContext
@@ -340,13 +590,14 @@ Rules:
 			var args RecordFindingArgs
 			if err := json.Unmarshal(actionResp.Action.Args, &args); err != nil {
 				stepErr = fmt.Errorf("invalid record_finding args: %w", err)
-			} else if a.subQuestionID == 0 {
-				stepErr = fmt.Errorf("record_finding is not available outside of deep research mode")
 			} else {
-				_, stepErr = a.store.SaveFinding(a.subQuestionID, args.Claim, args.SourceURL, "agent", args.Confidence)
-				if stepErr == nil {
-					stepResult = fmt.Sprintf("Successfully recorded finding: %q", args.Claim)
+				currentURL := ""
+				if page != nil {
+					if info, err := page.Info(); err == nil && info != nil {
+						currentURL = info.URL
+					}
 				}
+				stepResult, stepErr = a.handleRecordFinding(ctx, runID, args, currentURL)
 			}
 
 		case "done":
@@ -376,6 +627,9 @@ Rules:
 
 		if actionName == "done" || finalStatus == "completed" {
 			_ = a.store.UpdateAgentRunStatus(runID, "completed", finalResult)
+			if a.subQuestionID == 0 {
+				_ = a.PostRunGroundingPass(ctx, runID)
+			}
 			return a.store.GetAgentRun(runID)
 		}
 
@@ -395,6 +649,9 @@ Rules:
 	finalStatus = "max_steps_exceeded"
 	finalResult = fmt.Sprintf("Agent reached max steps limit (%d) before completion.", a.maxSteps)
 	_ = a.store.UpdateAgentRunStatus(runID, finalStatus, finalResult)
+	if a.subQuestionID == 0 {
+		_ = a.PostRunGroundingPass(ctx, runID)
+	}
 
 	return a.store.GetAgentRun(runID)
 }
@@ -403,6 +660,8 @@ func (a *Agent) execNavigate(ctx context.Context, page *rod.Page, targetURL stri
 	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
 		targetURL = "https://" + targetURL
 	}
+
+	a.AddVisitedURL(targetURL)
 
 	_ = stealthpkg.DefaultDomainRateLimiter.Wait(ctx, targetURL)
 	_ = stealthpkg.HumanDelayCtx(ctx, 300, 800)

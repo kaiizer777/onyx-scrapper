@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ type fakeUpdate struct {
 // production gateway.
 type telegramMock struct {
 	server *httptest.Server
+	mu     sync.Mutex
 	// updatesToSend is a queue: the next getUpdates pops one slot, which
 	// may be an Update slice, an empty array, or a 409 conflict (signaled
 	// by a sentinel error message).
@@ -73,20 +75,24 @@ func (m *telegramMock) handle(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.WriteString(w, `{"ok":true,"result":{"id":1,"is_bot":true,"first_name":"FakeBot","username":"fake_bot"}}`)
 	case "getUpdates":
 		off, _ := parseInt(r.Form.Get("offset"))
+		m.mu.Lock()
 		m.receivedOffsets = append(m.receivedOffsets, off)
 		if atomic.LoadInt32(&m.conflictOnce) > 0 {
 			atomic.AddInt32(&m.conflictOnce, -1)
+			m.mu.Unlock()
 			w.WriteHeader(http.StatusConflict)
 			_, _ = io.WriteString(w, `{"ok":false,"error_code":409,"description":"terminated by other getUpdates request"}`)
 			return
 		}
 		if len(m.updatesToSend) == 0 {
+			m.mu.Unlock()
 			// Long-poll: simulate "no updates" with empty array.
 			_, _ = io.WriteString(w, `{"ok":true,"result":[]}`)
 			return
 		}
 		batch := m.updatesToSend[0]
 		m.updatesToSend = m.updatesToSend[1:]
+		m.mu.Unlock()
 		body, _ := json.Marshal(batch)
 		_, _ = io.WriteString(w, fmt.Sprintf(`{"ok":true,"result":%s}`, body))
 	case "sendMessage":
@@ -96,6 +102,15 @@ func (m *telegramMock) handle(w http.ResponseWriter, r *http.Request) {
 	default:
 		_, _ = io.WriteString(w, `{"ok":true,"result":{}}`)
 	}
+}
+
+// offsets returns a snapshot of receivedOffsets under the mutex.
+func (m *telegramMock) offsets() []int {
+	m.mu.Lock()
+	out := make([]int, len(m.receivedOffsets))
+	copy(out, m.receivedOffsets)
+	m.mu.Unlock()
+	return out
 }
 
 func parseInt(s string) (int, error) {
@@ -177,11 +192,11 @@ func TestPoller_ReceivesUpdate_AndCallsHandler(t *testing.T) {
 	<-done
 
 	if atomic.LoadInt32(&got) != 1 {
-		t.Fatalf("handler was never called; got=%d calls=%d offsets=%v", atomic.LoadInt32(&got), atomic.LoadInt32(&mock.calls), mock.receivedOffsets)
+		t.Fatalf("handler was never called; got=%d calls=%d offsets=%v", atomic.LoadInt32(&got), atomic.LoadInt32(&mock.calls), mock.offsets())
 	}
 	// Library must have advanced offset past update_id 100.
-	if !containsInt(mock.receivedOffsets, 101) {
-		t.Errorf("expected offset 101 to be sent eventually, got %v", mock.receivedOffsets)
+	if !containsInt(mock.offsets(), 101) {
+		t.Errorf("expected offset 101 to be sent eventually, got %v", mock.offsets())
 	}
 }
 

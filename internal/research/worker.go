@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -18,12 +19,15 @@ import (
 	"github.com/kaiizer777/onyx-scrapper/internal/timecontext"
 )
 
+const DefaultMinConfidence = 0.4
+
 type Worker struct {
 	client             *llm.Client
 	store              *store.Store
 	registry           *discovery.Registry
 	verifier           *quality.SecondSourceVerifier
 	entityCheckEnabled bool
+	minConfidence      float64
 }
 
 func NewWorker(client *llm.Client, st *store.Store, registry *discovery.Registry, entityCheckEnabled bool, budget *quality.Budget, ttlHours int) *Worker {
@@ -33,7 +37,13 @@ func NewWorker(client *llm.Client, st *store.Store, registry *discovery.Registry
 		registry:           registry,
 		verifier:           quality.NewSecondSourceVerifier(client, registry, st, budget, ttlHours),
 		entityCheckEnabled: entityCheckEnabled,
+		minConfidence:      DefaultMinConfidence,
 	}
+}
+
+// SetMinConfidence sets the minimum confidence threshold for claim extraction.
+func (w *Worker) SetMinConfidence(min float64) {
+	w.minConfidence = min
 }
 
 type extractedClaims struct {
@@ -225,25 +235,53 @@ Text:
 			var claimEg errgroup.Group
 			for _, c := range extracted.Claims {
 				clm := c
+				if clm.Confidence < w.minConfidence {
+					slog.Debug("dropping low-confidence claim", "confidence", clm.Confidence, "claim", clm.Claim, "min_confidence", w.minConfidence)
+					continue
+				}
+
+				verifiedURL := selectedURLs[idx]
+				if clm.SourceURL != "" && !urlsRoughlyMatch(clm.SourceURL, verifiedURL) {
+					slog.Warn("LLM-reported source URL mismatch, clamping to verified URL",
+						"llm_url", clm.SourceURL, "verified_url", verifiedURL)
+				}
+				clm.SourceURL = verifiedURL
+
 				claimEg.Go(func() error {
-					claimText := clm.Claim
+					finding := store.Finding{
+						SubQuestionID:  sqID,
+						Claim:          clm.Claim,
+						SourceURL:      clm.SourceURL,
+						SourceProvider: selectedProviders[idx],
+						Confidence:     clm.Confidence,
+						Status:         store.StatusActive,
+					}
 
 					if w.entityCheckEnabled {
-						res, val, err := w.verifier.VerifyClaim(ctx, claimText)
+						res, val, err := w.verifier.VerifyClaim(ctx, clm.Claim)
 						if err != nil {
 							slog.Warn("Entity verification failed", "error", err)
 						} else {
-							if res == quality.ResultContradicted {
-								claimText = fmt.Sprintf("%s. Note: a second source suggests this may have changed — %s.", claimText, val)
+							switch res {
+							case quality.ResultContradicted:
+								finding.Status = store.StatusContradicted
+								finding.VerificationNote = val
 								slog.Info("Claim contradicted by second source", "original", clm.Claim, "new_value", val)
-							} else if res == quality.ResultConfirmed {
+							case quality.ResultUnclear:
+								finding.Status = store.StatusUnclear
+								finding.VerificationNote = val
+								slog.Info("Claim verification unclear", "claim", clm.Claim, "note", val)
+							case quality.ResultConfirmed:
+								finding.Status = store.StatusActive
 								slog.Debug("Claim confirmed by second source", "claim", clm.Claim)
+							default:
+								finding.Status = store.StatusActive
 							}
 						}
 					}
 
 					storeMu.Lock()
-					_, err := w.store.SaveFinding(sqID, claimText, clm.SourceURL, selectedProviders[idx], clm.Confidence)
+					_, err := w.store.InsertFinding(finding)
 					storeMu.Unlock()
 					if err != nil {
 						slog.Warn("Failed to save finding", "error", err)
@@ -259,3 +297,21 @@ Text:
 
 	return true, nil
 }
+
+// urlsRoughlyMatch checks whether two URLs have the same host and path (ignoring www. and trailing slashes).
+func urlsRoughlyMatch(u1, u2 string) bool {
+	p1, err1 := url.Parse(strings.TrimSpace(u1))
+	p2, err2 := url.Parse(strings.TrimSpace(u2))
+	if err1 != nil || err2 != nil {
+		return strings.EqualFold(strings.TrimRight(u1, "/"), strings.TrimRight(u2, "/"))
+	}
+	h1 := strings.TrimPrefix(strings.ToLower(p1.Hostname()), "www.")
+	h2 := strings.TrimPrefix(strings.ToLower(p2.Hostname()), "www.")
+	if h1 != h2 {
+		return false
+	}
+	path1 := strings.TrimRight(p1.Path, "/")
+	path2 := strings.TrimRight(p2.Path, "/")
+	return strings.EqualFold(path1, path2)
+}
+

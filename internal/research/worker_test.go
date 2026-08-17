@@ -406,3 +406,342 @@ func TestWorker_RunSubResearch_QueryReformulationOnAllFetchesFailed(t *testing.T
 		t.Fatal("expected findings extracted via reformulated query")
 	}
 }
+
+func TestExtractClaims_LowConfidenceDropped(t *testing.T) {
+	mockLLMServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": `{
+							"claims": [
+								{
+									"claim": "Low confidence claim that must be dropped.",
+									"source_url": "https://example.com/doc1",
+									"confidence": 0.1
+								},
+								{
+									"claim": "High confidence claim that must be retained.",
+									"source_url": "https://example.com/doc1",
+									"confidence": 0.95
+								}
+							]
+						}`,
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockLLMServer.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "worker_low_conf_test.db")
+	st, err := store.NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	runID, _ := st.CreateResearchRun("Test Goal")
+	sqID, _ := st.CreateSubQuestion(runID, "Test Low Confidence Gating")
+
+	searcher := &mockSearchProvider{
+		name: "searxng",
+		results: map[string][]discovery.SearchResult{
+			"test low confidence gating": {
+				{URL: "https://example.com/doc1", Title: "Doc 1", Snippet: "Doc 1 snippet", Provider: "searxng"},
+			},
+		},
+	}
+	fetcher := &mockFetchProvider{name: "colly"}
+	registry := discovery.NewRegistry([]discovery.SearchProvider{searcher}, map[string]discovery.FetchProvider{"colly": fetcher}, []string{"colly"}, nil)
+
+	provCfg := config.ProviderConfig{
+		BaseURL: mockLLMServer.URL,
+		Model:   "mock-model",
+		APIKey:  "test-key",
+	}
+	client := llm.NewClient(provCfg)
+	worker := NewWorker(client, st, registry, false, nil, 24)
+
+	err = worker.RunSubResearch(context.Background(), runID, sqID, "Test Low Confidence Gating")
+	if err != nil {
+		t.Fatalf("unexpected error running sub-research: %v", err)
+	}
+
+	findings, err := st.GetFindingsForSubQuestion(sqID)
+	if err != nil {
+		t.Fatalf("failed to get findings: %v", err)
+	}
+
+	if len(findings) != 1 {
+		t.Fatalf("expected exactly 1 finding (high confidence only), got %d findings", len(findings))
+	}
+	if findings[0].Claim != "High confidence claim that must be retained." {
+		t.Errorf("unexpected finding claim: %q", findings[0].Claim)
+	}
+	if findings[0].Confidence != 0.95 {
+		t.Errorf("expected confidence 0.95, got %f", findings[0].Confidence)
+	}
+}
+
+func TestExtractClaims_ConfidenceAtThresholdBoundaryIncluded(t *testing.T) {
+	mockLLMServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": `{
+							"claims": [
+								{
+									"claim": "Boundary confidence claim exactly at 0.4.",
+									"source_url": "https://example.com/doc1",
+									"confidence": 0.4
+								}
+							]
+						}`,
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockLLMServer.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "worker_boundary_test.db")
+	st, err := store.NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	runID, _ := st.CreateResearchRun("Test Goal")
+	sqID, _ := st.CreateSubQuestion(runID, "Test Boundary")
+
+	searcher := &mockSearchProvider{
+		name: "searxng",
+		results: map[string][]discovery.SearchResult{
+			"test boundary": {
+				{URL: "https://example.com/doc1", Title: "Doc 1", Snippet: "Doc 1 snippet", Provider: "searxng"},
+			},
+		},
+	}
+	fetcher := &mockFetchProvider{name: "colly"}
+	registry := discovery.NewRegistry([]discovery.SearchProvider{searcher}, map[string]discovery.FetchProvider{"colly": fetcher}, []string{"colly"}, nil)
+
+	provCfg := config.ProviderConfig{
+		BaseURL: mockLLMServer.URL,
+		Model:   "mock-model",
+		APIKey:  "test-key",
+	}
+	client := llm.NewClient(provCfg)
+	worker := NewWorker(client, st, registry, false, nil, 24)
+
+	err = worker.RunSubResearch(context.Background(), runID, sqID, "Test Boundary")
+	if err != nil {
+		t.Fatalf("unexpected error running sub-research: %v", err)
+	}
+
+	findings, err := st.GetFindingsForSubQuestion(sqID)
+	if err != nil {
+		t.Fatalf("failed to get findings: %v", err)
+	}
+
+	if len(findings) != 1 {
+		t.Fatalf("expected boundary claim (confidence 0.4) to be included, got %d findings", len(findings))
+	}
+	if findings[0].Claim != "Boundary confidence claim exactly at 0.4." {
+		t.Errorf("unexpected finding claim: %q", findings[0].Claim)
+	}
+}
+
+func TestExtractClaims_SourceURLAlwaysClampedToVerifiedURL(t *testing.T) {
+	mockLLMServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": `{
+							"claims": [
+								{
+									"claim": "Claim with hallucinated source URL.",
+									"source_url": "https://hallucinated-fake-source.com/article",
+									"confidence": 0.88
+								}
+							]
+						}`,
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockLLMServer.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "worker_clamp_test.db")
+	st, err := store.NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	runID, _ := st.CreateResearchRun("Test Goal")
+	sqID, _ := st.CreateSubQuestion(runID, "Test URL Clamping")
+
+	authoritativeURL := "https://example.com/doc1"
+	searcher := &mockSearchProvider{
+		name: "searxng",
+		results: map[string][]discovery.SearchResult{
+			"clamping": {
+				{URL: authoritativeURL, Title: "Doc 1", Snippet: "Authoritative snippet", Provider: "searxng"},
+			},
+		},
+	}
+	fetcher := &mockFetchProvider{name: "colly"}
+	registry := discovery.NewRegistry([]discovery.SearchProvider{searcher}, map[string]discovery.FetchProvider{"colly": fetcher}, []string{"colly"}, nil)
+
+	provCfg := config.ProviderConfig{
+		BaseURL: mockLLMServer.URL,
+		Model:   "mock-model",
+		APIKey:  "test-key",
+	}
+	client := llm.NewClient(provCfg)
+	worker := NewWorker(client, st, registry, false, nil, 24)
+
+	err = worker.RunSubResearch(context.Background(), runID, sqID, "clamping")
+	if err != nil {
+		t.Fatalf("unexpected error running sub-research: %v", err)
+	}
+
+	findings, err := st.GetFindingsForSubQuestion(sqID)
+	if err != nil || len(findings) == 0 {
+		t.Fatalf("expected findings to be saved, got: %v", err)
+	}
+
+	if findings[0].SourceURL != authoritativeURL {
+		t.Errorf("expected source URL to be clamped to verified URL %q, got %q", authoritativeURL, findings[0].SourceURL)
+	}
+}
+
+func TestWorker_ContradictedClaim_SetsStatusContradicted_NotTextMutated(t *testing.T) {
+	mockLLMServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+
+		var body map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		messages, _ := body["messages"].([]interface{})
+		systemRoleContent := ""
+		for _, msg := range messages {
+			if m, ok := msg.(map[string]interface{}); ok {
+				if m["role"] == "system" {
+					systemRoleContent, _ = m["content"].(string)
+				}
+			}
+		}
+
+		// Second-source verification prompt handler
+		if strings.Contains(systemRoleContent, "fact-checking assistant") {
+			resp := map[string]interface{}{
+				"choices": []map[string]interface{}{
+					{
+						"message": map[string]interface{}{
+							"role":    "assistant",
+							"content": "RESULT: [CONTRADICTED]\nVALUE: Tim Cook is the current CEO",
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(w).Encode(resp)
+			return
+		}
+
+		// Claim extraction prompt handler
+		resp := map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{
+					"message": map[string]interface{}{
+						"role": "assistant",
+						"content": `{
+							"claims": [
+								{
+									"claim": "CEO of Apple is Steve Jobs",
+									"source_url": "https://example.com/doc1",
+									"confidence": 0.92
+								}
+							]
+						}`,
+					},
+				},
+			},
+		}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockLLMServer.Close()
+
+	dbPath := filepath.Join(t.TempDir(), "worker_contradicted_test.db")
+	st, err := store.NewStore(dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer st.Close()
+
+	runID, _ := st.CreateResearchRun("Test Goal")
+	sqID, _ := st.CreateSubQuestion(runID, "Who is the CEO of Apple?")
+
+	searcher := &mockSearchProvider{
+		name: "searxng",
+		results: map[string][]discovery.SearchResult{
+			"apple": {
+				{URL: "https://example.com/doc1", Title: "Doc 1", Snippet: "Apple leadership article", Provider: "searxng"},
+			},
+		},
+	}
+	fetcher := &mockFetchProvider{name: "colly"}
+	registry := discovery.NewRegistry([]discovery.SearchProvider{searcher}, map[string]discovery.FetchProvider{"colly": fetcher}, []string{"colly"}, nil)
+
+	provCfg := config.ProviderConfig{
+		BaseURL: mockLLMServer.URL,
+		Model:   "mock-model",
+		APIKey:  "test-key",
+	}
+	client := llm.NewClient(provCfg)
+
+	// Initialize worker with entityCheckEnabled = true
+	worker := NewWorker(client, st, registry, true, nil, 24)
+
+	err = worker.RunSubResearch(context.Background(), runID, sqID, "Who is the CEO of Apple?")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	findings, err := st.GetFindingsForSubQuestion(sqID)
+	if err != nil || len(findings) == 0 {
+		t.Fatalf("expected finding to be saved in DB: %v", err)
+	}
+
+	finding := findings[0]
+
+	// 1. Assert status is StatusContradicted
+	if finding.Status != store.StatusContradicted {
+		t.Errorf("expected StatusContradicted, got %q", finding.Status)
+	}
+
+	// 2. Assert claim text is byte-for-byte unchanged (not mutated with note appended)
+	expectedClaim := "CEO of Apple is Steve Jobs"
+	if finding.Claim != expectedClaim {
+		t.Errorf("expected claim text to remain unmodified %q, got %q", expectedClaim, finding.Claim)
+	}
+
+	// 3. Assert structured verification note is stored
+	expectedNote := "Tim Cook is the current CEO"
+	if finding.VerificationNote != expectedNote {
+		t.Errorf("expected verification note %q, got %q", expectedNote, finding.VerificationNote)
+	}
+}
+

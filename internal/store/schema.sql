@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS agent_runs (
     goal TEXT,
     status TEXT,
     result TEXT,
+    is_grounded INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME,
     updated_at DATETIME
 );
@@ -87,21 +88,27 @@ CREATE TABLE IF NOT EXISTS run_pages (
 CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     subquestion_id INTEGER,
+    agent_run_id INTEGER,
     claim TEXT,
     source_url TEXT,
     source_provider TEXT,
     confidence REAL,
+    status TEXT NOT NULL DEFAULT 'active',
+    verification_note TEXT NOT NULL DEFAULT '',
+    authority_tier INTEGER NOT NULL DEFAULT 0,
     created_at DATETIME,
-    FOREIGN KEY(subquestion_id) REFERENCES research_subquestions(id) ON DELETE CASCADE
+    FOREIGN KEY(subquestion_id) REFERENCES research_subquestions(id) ON DELETE CASCADE,
+    FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS entity_cache (
     entity TEXT,
+    entity_type TEXT NOT NULL DEFAULT '',
     version_token TEXT,
     result TEXT,
     value TEXT,
     created_at DATETIME,
-    UNIQUE(entity, version_token)
+    UNIQUE(entity, entity_type, version_token)
 );
 
 -- Phase 7: Telegram gateway session linking. Each row joins a single

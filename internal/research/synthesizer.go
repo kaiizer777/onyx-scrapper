@@ -20,8 +20,21 @@ func NewSynthesizer(client *llm.Client, authManager *quality.AuthorityManager) *
 	return &Synthesizer{client: client, authManager: authManager}
 }
 
+// SplitFindingsForSynthesis separates findings into active and excluded (contradicted/unclear) sets.
+func SplitFindingsForSynthesis(findings []store.Finding) (active []store.Finding, excluded []store.Finding) {
+	for _, f := range findings {
+		if f.Status == store.StatusContradicted || f.Status == store.StatusUnclear {
+			excluded = append(excluded, f)
+		} else {
+			active = append(active, f)
+		}
+	}
+	return active, excluded
+}
+
 func (s *Synthesizer) Synthesize(ctx context.Context, plan ResearchPlan, findings []store.Finding) (string, error) {
-	findingsText := buildFindingsText(findings, s.authManager)
+	activeFindings, excludedFindings := SplitFindingsForSynthesis(findings)
+	findingsText := buildFindingsText(activeFindings, s.authManager)
 	outlineText := strings.Join(plan.ReportOutline, "\n- ")
 
 	currentDateStr := timecontext.Now().Format("January 2, 2006")
@@ -37,7 +50,7 @@ Here are the findings gathered by your research team:
 %s
 
 Write the final comprehensive markdown report following the outline. 
-IMPORTANT: Every claim you make MUST be inline-cited to its source URL using Markdown links or bracketed numbers. For example: "The library is highly performant [1](https://example.com)." Do not invent facts or citations. Only use the findings provided.
+IMPORTANT: Every claim you make MUST be inline-cited to its source URL using Markdown links or bracketed numbers. For example: "The library is highly performant [1](https://example.com)." Do not invent facts or citations. Only use the verified findings provided above.
 
 Respond directly with the markdown report content. Do not wrap in JSON.`, plan.Goal, currentDateStr, outlineText, findingsText)
 
@@ -51,5 +64,26 @@ Respond directly with the markdown report content. Do not wrap in JSON.`, plan.G
 		return "", fmt.Errorf("synthesis chat failed: %w", err)
 	}
 
-	return strings.TrimSpace(respStr), nil
+	report := strings.TrimSpace(respStr)
+
+	if len(excludedFindings) > 0 {
+		var sb strings.Builder
+		sb.WriteString("\n\n### Excluded Findings (Verification & Fact Check)\n")
+		for _, ef := range excludedFindings {
+			statusLabel := string(ef.Status)
+			if statusLabel == "" {
+				statusLabel = "excluded"
+			}
+			note := ef.VerificationNote
+			if note != "" {
+				sb.WriteString(fmt.Sprintf("- **[%s]** %s *(Source: %s, Note: %s)*\n", strings.ToUpper(statusLabel), ef.Claim, ef.SourceURL, note))
+			} else {
+				sb.WriteString(fmt.Sprintf("- **[%s]** %s *(Source: %s)*\n", strings.ToUpper(statusLabel), ef.Claim, ef.SourceURL))
+			}
+		}
+		report += sb.String()
+	}
+
+	return report, nil
 }
+
