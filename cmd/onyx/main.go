@@ -1200,7 +1200,12 @@ func buildRegistry(cfg *config.Config) *discovery.Registry {
 		fetchPriority = cfg.Discovery.FetchPriority
 	}
 
-	return discovery.NewRegistry(searchProviders, fetchProviders, fetchPriority, jinaReranker)
+	var reranker discovery.Reranker
+	if jinaReranker != nil {
+		reranker = jinaReranker
+	}
+
+	return discovery.NewRegistry(searchProviders, fetchProviders, fetchPriority, reranker)
 }
 
 // ----------------------------------------------------------------------------

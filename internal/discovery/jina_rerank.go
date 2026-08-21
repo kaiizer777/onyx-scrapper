@@ -46,7 +46,7 @@ type rerankResponse struct {
 }
 
 func (r *JinaReranker) Rerank(ctx context.Context, query string, docs []string) ([]RankedDoc, error) {
-	if !r.enabled || len(docs) == 0 {
+	if r == nil || !r.enabled || len(docs) == 0 {
 		return r.fallbackRerank(docs), nil
 	}
 

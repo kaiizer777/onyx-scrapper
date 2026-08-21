@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -56,29 +57,35 @@ type extractedClaims struct {
 
 func (w *Worker) reformulateQuery(ctx context.Context, question string) (string, error) {
 	currentDateStr := timecontext.Now().Format("January 2, 2006")
-	prompt := fmt.Sprintf("The search query \"%s\" yielded no usable results (pages were blocked or empty). Provide a single, simpler or broader alternative search query to find the same information.\n\nToday's date is %s. Use this as the ground truth for what is current — do not rely on your own training knowledge to guess the date or the current state of fast-changing facts. When building a search query about current/latest/recent information, use the actual current year given above, not a year from memory.\n\nReturn ONLY the query text, nothing else.", question, currentDateStr)
+	currentYear := timecontext.Now().Year()
+	prompt := fmt.Sprintf(`The search query "%s" yielded no usable results or extracted claims.
+Provide a concise, keyword-dense search query (3 to 6 keywords) to find the latest factual information on this topic.
+Focus on core entities, tools, benchmarks, and releases.
+
+Today's date is %s (Year: %d).
+Return ONLY the reformulated search query text, nothing else.`, question, currentDateStr, currentYear)
 	messages := []llm.Message{
-		{Role: "system", Content: "You are a search query reformulation assistant."},
+		{Role: "system", Content: "You are a search query reformulation assistant. Return only the optimized query text."},
 		{Role: "user", Content: prompt},
 	}
 	resp, err := w.client.Chat(ctx, messages)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(resp), nil
+	return strings.Trim(strings.TrimSpace(resp), `"'`+"`"), nil
 }
 
 func (w *Worker) RunSubResearch(ctx context.Context, runID int64, sqID int64, question string) error {
-	success, err := w.attemptSearchAndExtract(ctx, runID, sqID, question)
-	if !success {
-		// Reformulate
+	savedCount, err := w.attemptSearchAndExtract(ctx, runID, sqID, question)
+	if savedCount == 0 {
+		// Reformulate query
 		reformulated, reformErr := w.reformulateQuery(ctx, question)
 		if reformErr == nil && reformulated != "" && reformulated != question {
-			slog.Info("Reformulating query due to fetch failures", "original", question, "reformulated", reformulated)
-			success, err = w.attemptSearchAndExtract(ctx, runID, sqID, reformulated)
+			slog.Info("Reformulating query due to 0 findings or fetch failures", "original", question, "reformulated", reformulated)
+			savedCount, err = w.attemptSearchAndExtract(ctx, runID, sqID, reformulated)
 		}
 		
-		if !success {
+		if savedCount == 0 {
 			_ = w.store.UpdateSubQuestionStatus(sqID, "insufficient_data")
 			if err != nil {
 				return err
@@ -90,31 +97,36 @@ func (w *Worker) RunSubResearch(ctx context.Context, runID int64, sqID int64, qu
 	return nil
 }
 
-func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID int64, question string) (bool, error) {
+func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID int64, question string) (int, error) {
 	// 1. Search
 	results := w.registry.Search(ctx, question)
 	if len(results) == 0 {
-		return false, fmt.Errorf("no search results found for question: %s", question)
+		return 0, fmt.Errorf("no search results found for question: %s", question)
 	}
 
-	// 2. Fetch top N
-	var chunks = make([]string, 5)
-	var urls = make([]string, 5)
-	var providers = make([]string, 5)
-	
+	// 2. Fetch top candidates concurrently (try up to 10 search results to get clean chunks)
+	type fetchItem struct {
+		chunk    string
+		url      string
+		provider string
+	}
+	var fetchMu sync.Mutex
+	var validFetches []fetchItem
+
 	var eg errgroup.Group
-	
-	for i, res := range results {
-		if i >= 5 {
-			break
-		}
-		idx := i
+	maxCandidates := len(results)
+	if maxCandidates > 10 {
+		maxCandidates = 10
+	}
+
+	for i := 0; i < maxCandidates; i++ {
+		res := results[i]
 		u := res.URL
 		prov := res.Provider
-		
+
 		eg.Go(func() error {
 			pc, err := w.registry.Fetch(ctx, u, discovery.FetchOptions{Timeout: 30 * time.Second})
-			
+
 			var rawHTML, cleanText, provider string
 			if pc != nil {
 				rawHTML, cleanText, provider = pc.RawHTML, pc.CleanText, pc.Provider
@@ -123,17 +135,20 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 			}
 
 			integrity := quality.AnalyzeFetchIntegrity(rawHTML, cleanText, provider, err)
-			
 			if err != nil {
 				slog.Warn("Failed to fetch", "url", u, "error", err, "integrity", integrity)
 			}
 
-			if pc != nil && (integrity == quality.FetchOK || integrity == quality.FetchFallbackRecovered) {
-				chunks[idx] = cleanText
-				urls[idx] = u
-				providers[idx] = provider
+			if pc != nil && (integrity == quality.FetchOK || integrity == quality.FetchFallbackRecovered) && strings.TrimSpace(cleanText) != "" {
+				fetchMu.Lock()
+				validFetches = append(validFetches, fetchItem{
+					chunk:    cleanText,
+					url:      u,
+					provider: provider,
+				})
+				fetchMu.Unlock()
 			}
-			
+
 			// Persist page
 			if pc != nil {
 				_, _ = w.store.SavePage(pc.URL, rawHTML, cleanText, provider, string(integrity))
@@ -146,20 +161,18 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 		})
 	}
 	_ = eg.Wait()
-	
+
+	if len(validFetches) == 0 {
+		return 0, fmt.Errorf("all fetches failed for question: %s", question)
+	}
+
 	var filteredChunks []string
 	var filteredURLs []string
 	var filteredProviders []string
-	for i := 0; i < 5; i++ {
-		if chunks[i] != "" {
-			filteredChunks = append(filteredChunks, chunks[i])
-			filteredURLs = append(filteredURLs, urls[i])
-			filteredProviders = append(filteredProviders, providers[i])
-		}
-	}
-	
-	if len(filteredChunks) == 0 {
-		return false, fmt.Errorf("all fetches failed for question: %s", question)
+	for _, item := range validFetches {
+		filteredChunks = append(filteredChunks, item.chunk)
+		filteredURLs = append(filteredURLs, item.url)
+		filteredProviders = append(filteredProviders, item.provider)
 	}
 
 	// 3. Rerank
@@ -194,7 +207,8 @@ func (w *Worker) attemptSearchAndExtract(ctx context.Context, runID int64, sqID 
 	// 5. Extract claims with MiMo
 	var extractEg errgroup.Group
 	var storeMu sync.Mutex
-	
+	var totalSaved int64
+
 	for i, chunk := range selectedChunks {
 		idx := i
 		chk := chunk
@@ -205,7 +219,7 @@ Today's date is %s. Use this as the ground truth for what is current.
 Return a JSON object with a "claims" array containing objects with "claim" (the statement), "source_url" (should be exactly "%s"), and "confidence" (0.0 to 1.0).
 Text:
 %s`, question, currentDateStr, selectedURLs[idx], chk)
-			
+
 			messages := []llm.Message{
 				{Role: "system", Content: "You are an extraction assistant. Respond strictly with JSON."},
 				{Role: "user", Content: prompt},
@@ -281,7 +295,10 @@ Text:
 					}
 
 					storeMu.Lock()
-					_, err := w.store.InsertFinding(finding)
+					fID, err := w.store.InsertFinding(finding)
+					if err == nil && fID > 0 {
+						atomic.AddInt64(&totalSaved, 1)
+					}
 					storeMu.Unlock()
 					if err != nil {
 						slog.Warn("Failed to save finding", "error", err)
@@ -295,7 +312,7 @@ Text:
 	}
 	_ = extractEg.Wait()
 
-	return true, nil
+	return int(atomic.LoadInt64(&totalSaved)), nil
 }
 
 // urlsRoughlyMatch checks whether two URLs have the same host and path (ignoring www. and trailing slashes).

@@ -182,8 +182,12 @@ func NewStore(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("failed to open sqlite db at %s: %w", dbPath, err)
 	}
 
+	// modernc.org/sqlite requires single-writer serialization to prevent SQLITE_BUSY
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
 	// Configure SQLite connection pragmas (WAL mode, busy timeout, foreign keys)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;"); err != nil {
+	if _, err := db.Exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=10000; PRAGMA foreign_keys=ON;"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to set pragmas: %w", err)
 	}

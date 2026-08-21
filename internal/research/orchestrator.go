@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 
 	"github.com/kaiizer777/onyx-scrapper/internal/llm"
@@ -239,11 +240,12 @@ func (o *Orchestrator) executeParallelResearch(ctx context.Context, runID int64,
 			err := o.worker.RunSubResearch(ctx, runID, q.ID, q.Question)
 			
 			if err != nil {
-				slog.Warn("Sub-research failed", "question", q.Question, "error", err)
-				_ = o.store.UpdateSubQuestionStatus(q.ID, "failed")
+				slog.Warn("Sub-research completed with notice", "question", q.Question, "error", err)
+				if !strings.Contains(err.Error(), "insufficient_data") {
+					_ = o.store.UpdateSubQuestionStatus(q.ID, "failed")
+				}
 			} else {
 				slog.Info("Completed sub-research", "question", q.Question)
-				_ = o.store.UpdateSubQuestionStatus(q.ID, "done")
 			}
 		}(sq)
 	}

@@ -66,13 +66,21 @@ Respond directly with the markdown report content. Do not wrap in JSON.`, plan.G
 
 	report := strings.TrimSpace(respStr)
 
-	if len(excludedFindings) > 0 {
+	// Only surface explicitly CONTRADICTED findings in the report appendix; omit noisy UNCLEAR items
+	var contradictedFindings []store.Finding
+	for _, ef := range excludedFindings {
+		if ef.Status == store.StatusContradicted {
+			contradictedFindings = append(contradictedFindings, ef)
+		}
+	}
+
+	if len(contradictedFindings) > 0 {
 		var sb strings.Builder
 		sb.WriteString("\n\n### Excluded Findings (Verification & Fact Check)\n")
-		for _, ef := range excludedFindings {
+		for _, ef := range contradictedFindings {
 			statusLabel := string(ef.Status)
 			if statusLabel == "" {
-				statusLabel = "excluded"
+				statusLabel = "contradicted"
 			}
 			note := ef.VerificationNote
 			if note != "" {
